@@ -1,0 +1,7 @@
+{
+  "discord": {
+    "alert_channel_id": null,
+    "voice_channel_id": null,
+    "command_prefix": "!"
+  }
+}

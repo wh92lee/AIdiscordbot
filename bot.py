@@ -13,8 +13,6 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
-
 # 보스이름 -> asyncio.Task (개별 리젠 알림)
 pending_tasks = {}
 
@@ -25,12 +23,13 @@ boss_info = {}
 group_warning_tasks = {}
 
 CONFIG_FILE = "boss_config.json"
+SETTINGS_FILE = "settings.json"
 
 
-# ────────── 설정 파일 ──────────
+# ────────── 설정 파일 (boss_config.json) ──────────
 
 def load_config():
-    """boss_config.json에서 알림 활성화 상태 로드 (없으면 전체 활성화)"""
+    """boss_config.json에서 보스별 알림 활성화 상태 로드 (없으면 전체 활성화)"""
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -45,6 +44,48 @@ def save_config(config):
 def is_enabled(boss_name):
     """보스 알림 활성화 여부 (기본값: True)"""
     return load_config().get(boss_name, True)
+
+
+# ────────── 설정 파일 (settings.json) ──────────
+
+def load_settings():
+    """settings.json에서 전체 설정값 로드"""
+    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_settings(settings):
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+
+
+def get_setting(*keys, default=None):
+    """settings.json에서 중첩 키 값 조회
+    예) get_setting("discord", "voice_channel_id")
+    """
+    data = load_settings()
+    for key in keys:
+        if isinstance(data, dict) and key in data:
+            data = data[key]
+        else:
+            return default
+    return data
+
+
+def set_setting(value, *keys):
+    """settings.json에서 중첩 키 값 저장
+    예) set_setting(123456, "discord", "voice_channel_id")
+    """
+    settings = load_settings()
+    target = settings
+    for key in keys[:-1]:
+        target = target.setdefault(key, {})
+    target[keys[-1]] = value
+    save_settings(settings)
+
+
+PREFIX = get_setting("discord", "command_prefix", default="!")
+bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 
 # ────────── bosses.txt ──────────
@@ -187,8 +228,7 @@ class BossToggleView(discord.ui.View):
 
 async def play_tts(text_channel, text):
     """설정된 음성 채널에서 TTS 재생"""
-    config = load_config()
-    vc_id = config.get("voice_channel_id")
+    vc_id = get_setting("discord", "voice_channel_id")
     if not vc_id:
         return
 
@@ -332,7 +372,14 @@ def register_alert(channel, boss_name, target_dt, label):
 
 @bot.event
 async def on_ready():
+    s = load_settings()
+    prefix      = s.get("discord", {}).get("command_prefix", "!")
+    alert_ch_id = s.get("discord", {}).get("alert_channel_id")
+    voice_ch_id = s.get("discord", {}).get("voice_channel_id")
     print(f"✅ {bot.user} 봇이 준비되었습니다!")
+    print(f"   prefix        : {prefix}")
+    print(f"   alert_channel : {alert_ch_id or '미설정'}")
+    print(f"   voice_channel : {voice_ch_id or '미설정'}")
 
 
 # ────────── 명령어 ──────────
@@ -498,8 +545,7 @@ async def set_voice_channel(ctx):
     사용법: !음성채널
     """
     if not ctx.author.voice or not ctx.author.voice.channel:
-        config = load_config()
-        vc_id = config.get("voice_channel_id")
+        vc_id = get_setting("discord", "voice_channel_id")
         if vc_id:
             vc = ctx.guild.get_channel(vc_id)
             vc_name = vc.name if vc else "알 수 없음 (채널 삭제됨)"
@@ -509,9 +555,7 @@ async def set_voice_channel(ctx):
         return
 
     voice_channel = ctx.author.voice.channel
-    config = load_config()
-    config["voice_channel_id"] = voice_channel.id
-    save_config(config)
+    set_setting(voice_channel.id, "discord", "voice_channel_id")
 
     await ctx.send(f"🔊 음성 알림 채널이 **{voice_channel.name}** 으로 설정되었습니다.")
 
@@ -519,13 +563,11 @@ async def set_voice_channel(ctx):
 @bot.command(name="음성채널해제")
 async def unset_voice_channel(ctx):
     """음성 알림 채널 설정 해제"""
-    config = load_config()
-    if "voice_channel_id" not in config:
+    if not get_setting("discord", "voice_channel_id"):
         await ctx.send("❌ 설정된 음성 채널이 없습니다.")
         return
 
-    del config["voice_channel_id"]
-    save_config(config)
+    set_setting(None, "discord", "voice_channel_id")
     await ctx.send("🔇 음성 알림이 해제되었습니다.")
 
 

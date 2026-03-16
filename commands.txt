@@ -91,6 +91,12 @@
 
 ====================================
   파일 설명
-  bosses.txt      → 보스 이름 / 리젠 시간 추가·수정
-  boss_config.json → 알림 ON/OFF 상태 저장 (자동 생성)
+  settings.json    → 디스코드 설정값 (직접 수정)
+                     - command_prefix  : 명령어 접두사 (기본 !)
+                     - alert_channel_id: 텍스트 알림 채널 ID
+                     - voice_channel_id: 음성 알림 채널 ID (!음성채널 명령어로도 설정 가능)
+
+  bosses.txt       → 보스 이름 / 리젠 시간 추가·수정
+
+  boss_config.json → 보스별 알림 ON/OFF 상태 저장 (자동 생성, 직접 수정 불필요)
 ====================================
