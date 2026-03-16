@@ -1,7 +1,7 @@
 {
   "discord": {
-    "alert_channel_id": null,
-    "voice_channel_id": null,
+    "alert_channel_id": 1483074439066288239,
+    "voice_channel_id": 1345765209683263664,
     "command_prefix": "!"
   }
 }
