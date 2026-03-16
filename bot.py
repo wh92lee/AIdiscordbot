@@ -22,8 +22,9 @@ boss_info = {}
 # group_key(가장 빠른 보스이름) -> asyncio.Task (5분 전 묶음 알림)
 group_warning_tasks = {}
 
-CONFIG_FILE = "boss_config.json"
+CONFIG_FILE   = "boss_config.json"
 SETTINGS_FILE = "settings.json"
+RESPAWN_FILE  = "respawn_data.json"
 
 
 # ────────── 설정 파일 (boss_config.json) ──────────
@@ -86,6 +87,42 @@ def set_setting(value, *keys):
 
 PREFIX = get_setting("discord", "command_prefix", default="!")
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+
+
+# ────────── 리젠 데이터 파일 (respawn_data.json) ──────────
+
+def save_respawn_entry(boss_name, target_dt, label, channel_id):
+    """보스 알림 등록 시 파일에 저장"""
+    data = {}
+    if os.path.exists(RESPAWN_FILE):
+        with open(RESPAWN_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    data[boss_name] = {
+        "respawn_at": target_dt.isoformat(),
+        "label": label,
+        "channel_id": channel_id
+    }
+    with open(RESPAWN_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def delete_respawn_entry(boss_name):
+    """보스 알림 완료/취소 시 파일에서 삭제"""
+    if not os.path.exists(RESPAWN_FILE):
+        return
+    with open(RESPAWN_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    data.pop(boss_name, None)
+    with open(RESPAWN_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_respawn_data():
+    """저장된 전체 리젠 데이터 로드"""
+    if not os.path.exists(RESPAWN_FILE):
+        return {}
+    with open(RESPAWN_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # ────────── bosses.txt ──────────
@@ -291,6 +328,7 @@ async def schedule_notify(channel, boss_name, target_dt, label):
 
     pending_tasks.pop(boss_name, None)
     boss_info.pop(boss_name, None)
+    delete_respawn_entry(boss_name)
 
 
 def compute_groups():
@@ -365,6 +403,7 @@ def register_alert(channel, boss_name, target_dt, label):
     task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label))
     pending_tasks[boss_name] = task
 
+    save_respawn_entry(boss_name, target_dt, label, channel.id)
     recalculate_group_warnings(channel)
 
 
@@ -380,6 +419,52 @@ async def on_ready():
     print(f"   prefix        : {prefix}")
     print(f"   alert_channel : {alert_ch_id or '미설정'}")
     print(f"   voice_channel : {voice_ch_id or '미설정'}")
+
+    # ── 봇 재시작 시 저장된 리젠 알림 복구 ──
+    data = load_respawn_data()
+    if not data:
+        return
+
+    restored, missed = [], []
+
+    for boss_name, entry in data.items():
+        channel = bot.get_channel(entry["channel_id"])
+        if not channel:
+            continue
+
+        target_dt = datetime.fromisoformat(entry["respawn_at"])
+        label = entry["label"]
+        now = datetime.now()
+
+        if target_dt <= now:
+            # 이미 리젠 시각이 지난 경우
+            missed.append((boss_name, target_dt))
+            delete_respawn_entry(boss_name)
+        else:
+            # 아직 리젠 전 → 알림 재등록
+            boss_info[boss_name] = {"respawn_at": target_dt, "label": label}
+            task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label))
+            pending_tasks[boss_name] = task
+            recalculate_group_warnings(channel)
+            restored.append(boss_name)
+
+    # 복구 결과 채널에 안내
+    for boss_name, entry in data.items():
+        channel = bot.get_channel(entry["channel_id"])
+        if not channel:
+            continue
+
+        if restored or missed:
+            embed = discord.Embed(title="🔄 봇 재시작 - 알림 복구", color=discord.Color.blurple())
+            if restored:
+                embed.add_field(name="✅ 복구 완료", value="\n".join(restored), inline=False)
+            if missed:
+                missed_str = "\n".join(
+                    f"{name} (리젠 시각: {dt.strftime('%H:%M')})" for name, dt in missed
+                )
+                embed.add_field(name="⚠️ 재시작 중 리젠 (놓침)", value=missed_str, inline=False)
+            await channel.send(embed=embed)
+            break  # 채널 하나에만 전송
 
 
 # ────────── 명령어 ──────────
@@ -583,6 +668,7 @@ async def cancel_boss(ctx, *, boss_name: str):
     pending_tasks[matched].cancel()
     pending_tasks.pop(matched, None)
     boss_info.pop(matched, None)
+    delete_respawn_entry(matched)
 
     recalculate_group_warnings(ctx.channel)
 
