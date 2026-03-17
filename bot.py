@@ -176,6 +176,8 @@ def format_remaining(target_dt):
 
 
 def parse_time(time_str, must_be_future=False):
+    if len(time_str) == 4 and time_str.isdigit():
+        time_str = time_str[:2] + ":" + time_str[2:]
     now = datetime.now()
     dt = datetime.strptime(time_str, "%H:%M").replace(
         year=now.year, month=now.month, day=now.day
