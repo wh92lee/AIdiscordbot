@@ -412,6 +412,17 @@ def register_alert(channel, boss_name, target_dt, label):
 # ────────── 이벤트 ──────────
 
 @bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+    if message.content.strip() == "현황":
+        ctx = await bot.get_context(message)
+        await status(ctx)
+        return
+    await bot.process_commands(message)
+
+
+@bot.event
 async def on_ready():
     s = load_settings()
     prefix      = s.get("discord", {}).get("command_prefix", "!")
