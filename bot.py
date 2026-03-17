@@ -437,6 +437,40 @@ async def on_message(message):
         ctx = await bot.get_context(message)
         await status(ctx)
         return
+
+    # !보스명 시간 형식 처리 (예: !니드호그 15:30)
+    content = message.content.strip()
+    if content.startswith(PREFIX):
+        parts = content[len(PREFIX):].split()
+        if len(parts) == 2:
+            boss_input, time_input = parts
+            bosses = load_bosses()
+            matched = find_boss(boss_input, bosses)
+            if matched:
+                ctx = await bot.get_context(message)
+                try:
+                    target_dt = parse_time(time_input, must_be_future=True)
+                except ValueError:
+                    await ctx.send("❌ 시간 형식이 올바르지 않습니다. 예) `!니드호그 15:30`")
+                    return
+
+                if not is_enabled(matched):
+                    await ctx.send(f"🔴 **{matched}** 은(는) 알림이 비활성화되어 있습니다. `!알림설정`에서 켜주세요.")
+                    return
+
+                register_alert(ctx.channel, matched, target_dt, "수동 설정")
+
+                embed = discord.Embed(
+                    title="🕐 리젠 예약 완료",
+                    description=f"**{matched}** 리젠 예상 시각이 등록되었습니다.",
+                    color=discord.Color.purple()
+                )
+                embed.add_field(name="젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
+                embed.add_field(name="남은 시간", value=format_remaining(target_dt), inline=True)
+                embed.set_footer(text="점검 후 수동 설정")
+                await ctx.send(embed=embed)
+                return
+
     await bot.process_commands(message)
 
 
