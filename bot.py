@@ -840,6 +840,31 @@ async def ping(ctx):
     await ctx.send(f"🏓 Pong! ({round(bot.latency * 1000)}ms)")
 
 
+@bot.command(name="보스초기화", aliases=["초기화", "리셋"])
+async def reset_all(ctx):
+    count = len([t for t in pending_tasks.values() if not t.done()])
+
+    for task in pending_tasks.values():
+        task.cancel()
+    for task in group_warning_tasks.values():
+        task.cancel()
+
+    pending_tasks.clear()
+    boss_info.clear()
+    group_warning_tasks.clear()
+
+    if os.path.exists(RESPAWN_FILE):
+        with open(RESPAWN_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+
+    embed = discord.Embed(
+        title="🗑️ 초기화 완료",
+        description=f"등록된 보스 알림 **{count}개**가 모두 제거되었습니다.",
+        color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
+
+
 async def show_commands(ctx):
     embed = discord.Embed(
         title="📖 명령어 목록",
@@ -868,7 +893,8 @@ async def show_commands(ctx):
         name="🔔 알림 설정",
         value=(
             "`!알림설정` — 보스별 알림 ON/OFF 설정\n"
-            "`!취소 보스명` — 등록된 보스 알림 취소"
+            "`!취소 보스명` — 등록된 보스 알림 취소\n"
+            "`!초기화` / `!리셋` / `!보스초기화` — 등록된 보스 알림 전체 제거"
         ),
         inline=False
     )
