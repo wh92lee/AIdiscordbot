@@ -160,6 +160,19 @@ def load_bosses_by_chapter():
     return chapters
 
 
+def get_boss_chapter(boss_name):
+    """보스 이름으로 챕터 번호 반환 (없으면 None)"""
+    with open("bosses.txt", "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("|")
+            if len(parts) == 3 and parts[1].strip() == boss_name:
+                return parts[0].strip()
+    return None
+
+
 def find_boss(name, bosses):
     if name in bosses:
         return name
@@ -346,6 +359,8 @@ async def schedule_notify(channel, boss_name, target_dt, label):
 
     bosses = load_bosses()
     respawn_minutes = bosses.get(boss_name, 0)
+    chapter = get_boss_chapter(boss_name)
+    auto_renew = chapter in ("2", "3")
 
     embed = discord.Embed(
         title="⚔️ 보스 리젠 알림!",
@@ -355,13 +370,26 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     embed.add_field(name="등록 방식", value=label, inline=True)
     embed.add_field(name="리젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
 
-    view = CutButton(boss_name, respawn_minutes, channel) if respawn_minutes else None
+    view = None if auto_renew else (CutButton(boss_name, respawn_minutes, channel) if respawn_minutes else None)
     await channel.send("@here", embed=embed, view=view)
     await play_tts(channel, f"{boss_name} 시간입니다.")
 
     pending_tasks.pop(boss_name, None)
     boss_info.pop(boss_name, None)
     delete_respawn_entry(boss_name)
+
+    # 챕터 2/3 보스는 3초 후 자동 갱신
+    if auto_renew and respawn_minutes:
+        await asyncio.sleep(3)
+        next_dt = target_dt + timedelta(minutes=respawn_minutes)
+        register_alert(channel, boss_name, next_dt, "자동 갱신")
+        embed_renew = discord.Embed(
+            title="🔄 자동 갱신",
+            description=f"**{boss_name}** 다음 리젠 알림이 자동 등록되었습니다.",
+            color=discord.Color.blurple()
+        )
+        embed_renew.add_field(name="다음 젠 시각", value=next_dt.strftime("%H:%M"), inline=True)
+        await channel.send(embed=embed_renew)
 
 
 def compute_groups():
