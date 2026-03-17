@@ -327,6 +327,19 @@ async def play_tts(text_channel, text):
 # ────────── 알림 스케줄링 ──────────
 
 async def schedule_notify(channel, boss_name, target_dt, label):
+    # 5분 전 단독 알림
+    warning_secs = (target_dt - timedelta(minutes=5) - datetime.now()).total_seconds()
+    if warning_secs > 0:
+        await asyncio.sleep(warning_secs)
+        embed = discord.Embed(
+            title="⚠️ 보스 리젠 5분 전!",
+            description=f"**{boss_name}** 이(가) 5분 후 리젠됩니다!",
+            color=discord.Color.yellow()
+        )
+        embed.add_field(name="젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
+        await channel.send("@here", embed=embed)
+        await play_tts(channel, f"{boss_name} 5분 전 입니다.")
+
     remaining = (target_dt - datetime.now()).total_seconds()
     if remaining > 0:
         await asyncio.sleep(remaining)
