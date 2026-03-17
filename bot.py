@@ -142,6 +142,24 @@ def load_bosses():
     return bosses
 
 
+def load_bosses_by_chapter():
+    """챕터별로 그룹화된 보스 목록 반환 {chapter: [(name, minutes), ...]}"""
+    from collections import OrderedDict
+    chapters = OrderedDict()
+    with open("bosses.txt", "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("|")
+            if len(parts) == 3:
+                chapter = parts[0].strip()
+                name = parts[1].strip()
+                minutes = int(parts[2].strip())
+                chapters.setdefault(chapter, []).append((name, minutes))
+    return chapters
+
+
 def find_boss(name, bosses):
     if name in bosses:
         return name
@@ -611,21 +629,51 @@ async def status(ctx):
 
 @bot.command(name="보스목록")
 async def boss_list(ctx):
-    bosses = load_bosses()
+    chapters = load_bosses_by_chapter()
     config = load_config()
-    embed = discord.Embed(title="📋 오딘 보스 목록", color=discord.Color.blue())
 
-    for name, minutes in bosses.items():
-        enabled = config.get(name, True)
-        status_icon = "🟢" if enabled else "🔴"
-        embed.add_field(
-            name=f"{status_icon} {name}",
-            value=format_duration(minutes),
-            inline=True
-        )
+    chapter_labels = {
+        "2": "챕터 2", "3": "챕터 3", "4": "챕터 4",
+        "5": "챕터 5", "6": "챕터 6", "7": "챕터 7",
+        "11": "챕터 11 (던전)"
+    }
 
-    embed.set_footer(text="🟢 알림 ON  |  🔴 알림 OFF  |  !알림설정 으로 변경")
-    await ctx.send(embed=embed)
+    embeds = []
+    current_embed = discord.Embed(title="📋 오딘 보스 목록", color=discord.Color.blue())
+    field_count = 0
+
+    for chapter, boss_list_items in chapters.items():
+        label = chapter_labels.get(chapter, f"챕터 {chapter}")
+
+        # 챕터 구분선 필드 추가 시 25개 초과 여부 확인
+        if field_count + len(boss_list_items) + 1 > 25:
+            embeds.append(current_embed)
+            current_embed = discord.Embed(title="📋 오딘 보스 목록 (계속)", color=discord.Color.blue())
+            field_count = 0
+
+        current_embed.add_field(name=f"── {label} ──", value="\u200b", inline=False)
+        field_count += 1
+
+        for name, minutes in boss_list_items:
+            if field_count >= 25:
+                embeds.append(current_embed)
+                current_embed = discord.Embed(title="📋 오딘 보스 목록 (계속)", color=discord.Color.blue())
+                field_count = 0
+
+            enabled = config.get(name, True)
+            status_icon = "🟢" if enabled else "🔴"
+            current_embed.add_field(
+                name=f"{status_icon} {name}",
+                value=format_duration(minutes),
+                inline=True
+            )
+            field_count += 1
+
+    current_embed.set_footer(text="🟢 알림 ON  |  🔴 알림 OFF  |  !알림설정 으로 변경")
+    embeds.append(current_embed)
+
+    for embed in embeds:
+        await ctx.send(embed=embed)
 
 
 @bot.command(name="알림설정")
