@@ -88,6 +88,16 @@ def set_setting(value, *keys):
 PREFIX = get_setting("discord", "command_prefix", default="!")
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
+ALLOWED_ROLE = "운영진"
+
+
+@bot.check
+async def only_staff(ctx):
+    if any(r.name == ALLOWED_ROLE for r in ctx.author.roles):
+        return True
+    await ctx.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
+    return False
+
 
 # ────────── 리젠 데이터 파일 (respawn_data.json) ──────────
 
@@ -474,7 +484,14 @@ def register_alert(channel, boss_name, target_dt, label):
 async def on_message(message):
     if message.author.bot:
         return
+
+    def is_staff(member):
+        return any(r.name == ALLOWED_ROLE for r in member.roles)
+
     if message.content.strip() in ("보스", "ㅄ"):
+        if not is_staff(message.author):
+            await message.channel.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
+            return
         ctx = await bot.get_context(message)
         await status(ctx)
         return
@@ -488,6 +505,9 @@ async def on_message(message):
             bosses = load_bosses()
             matched = find_boss(boss_input, bosses)
             if matched:
+                if not is_staff(message.author):
+                    await message.channel.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
+                    return
                 ctx = await bot.get_context(message)
                 try:
                     target_dt = parse_time(time_input, must_be_future=True)
