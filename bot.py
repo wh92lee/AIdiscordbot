@@ -415,7 +415,7 @@ def register_alert(channel, boss_name, target_dt, label):
 async def on_message(message):
     if message.author.bot:
         return
-    if message.content.strip() == "현황":
+    if message.content.strip() in ("보스", "ㅄ"):
         ctx = await bot.get_context(message)
         await status(ctx)
         return
