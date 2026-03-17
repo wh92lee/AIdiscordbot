@@ -605,10 +605,9 @@ async def status(ctx):
         target_dt = info["respawn_at"]
         label = info["label"]
         embed.add_field(
-            name=f"{i}. {boss_name}",
+            name=f"{i}. {boss_name}  ⏱ {format_remaining(target_dt)}",
             value=(
-                f"⏱ 남은 시간: **{format_remaining(target_dt)}**\n"
-                f"🕐 리젠 시각: {target_dt.strftime('%H:%M')}  |  {label}"
+                f"🕐 젠 시각: {target_dt.strftime('%H:%M')}  |  {label}"
             ),
             inline=False
         )
