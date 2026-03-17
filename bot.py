@@ -488,6 +488,11 @@ async def on_message(message):
     def is_staff(member):
         return any(r.name == ALLOWED_ROLE for r in member.roles)
 
+    if message.content.strip() in ("명령어", "!명령어"):
+        ctx = await bot.get_context(message)
+        await show_commands(ctx)
+        return
+
     if message.content.strip() in ("보스", "ㅄ"):
         if not is_staff(message.author):
             await message.channel.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
@@ -833,6 +838,50 @@ async def cancel_boss(ctx, *, boss_name: str):
 @bot.command(name="핑")
 async def ping(ctx):
     await ctx.send(f"🏓 Pong! ({round(bot.latency * 1000)}ms)")
+
+
+async def show_commands(ctx):
+    embed = discord.Embed(
+        title="📖 명령어 목록",
+        description="사용 가능한 명령어 안내입니다.",
+        color=discord.Color.green()
+    )
+    embed.add_field(
+        name="⚔️ 보스 등록",
+        value=(
+            "`!킬 보스명` — 현재 시각 기준 처치 등록\n"
+            "`!킬 보스명 14:30` — 처치 시각 지정 등록\n"
+            "`!젠 보스명 15:30` — 리젠 시각 직접 지정\n"
+            "`!보스명 15:30` — 리젠 시각 직접 지정 (단축)"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="📋 조회",
+        value=(
+            "`보스` 또는 `ㅄ` — 현재 대기 중인 보스 현황\n"
+            "`!보스목록` — 전체 보스 및 리젠 시간 목록"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🔔 알림 설정",
+        value=(
+            "`!알림설정` — 보스별 알림 ON/OFF 설정\n"
+            "`!취소 보스명` — 등록된 보스 알림 취소"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="🔊 음성 채널",
+        value=(
+            "`!음성채널` — 현재 입장 중인 음성 채널을 TTS 채널로 설정\n"
+            "`!음성채널해제` — TTS 음성 알림 해제"
+        ),
+        inline=False
+    )
+    embed.set_footer(text="운영진 역할이 있어야 명령어를 사용할 수 있습니다.")
+    await ctx.send(embed=embed)
 
 
 bot.run(os.getenv("DISCORD_TOKEN"))
