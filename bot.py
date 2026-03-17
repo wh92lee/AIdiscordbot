@@ -6,7 +6,7 @@ import asyncio
 import tempfile
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from gtts import gTTS
+import edge_tts
 
 load_dotenv()
 
@@ -276,10 +276,10 @@ async def play_tts(text_channel, text):
 
     tts_path = None
     try:
-        tts = gTTS(text=text, lang="ko")
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             tts_path = f.name
-            tts.save(tts_path)
+        communicate = edge_tts.Communicate(text=text, voice="ko-KR-SunHiNeural")
+        await communicate.save(tts_path)
 
         vc = discord.utils.get(bot.voice_clients, guild=guild)
         if vc and vc.is_connected():
