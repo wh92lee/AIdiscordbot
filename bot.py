@@ -135,9 +135,9 @@ def load_bosses():
             if not line or line.startswith("#"):
                 continue
             parts = line.split("|")
-            if len(parts) == 2:
-                name = parts[0].strip()
-                minutes = int(parts[1].strip())
+            if len(parts) == 3:
+                name = parts[1].strip()
+                minutes = int(parts[2].strip())
                 bosses[name] = minutes
     return bosses
 
