@@ -630,8 +630,6 @@ async def status(ctx):
         key=lambda name: boss_info[name]["respawn_at"]
     )
 
-    embed = discord.Embed(title="⏰ 리젠 대기 현황", color=discord.Color.orange())
-
     urgent = []
     normal = []
 
@@ -643,33 +641,35 @@ async def status(ctx):
         else:
             normal.append((i, boss_name))
 
-    if urgent:
-        urgent_str = "  →  ".join(f"**{i}. {name}**" for i, name in urgent)
-        embed.add_field(name="🚨 10분 이내 리젠", value=urgent_str, inline=False)
+    lines = []
 
-    for i, boss_name in normal:
-        info = boss_info[boss_name]
-        target_dt = info["respawn_at"]
-        label = info["label"]
-        embed.add_field(
-            name=f"{i}. {boss_name}  ⏱ {format_remaining(target_dt)}",
-            value=(
-                f"🕐 젠 시각: {target_dt.strftime('%H:%M')}  |  {label}"
-            ),
-            inline=False
-        )
+    if urgent:
+        lines.append("🚨 **10분 이내 리젠**")
+        lines.append("  →  ".join(f"**{i}. {name}**" for i, name in urgent))
+        lines.append("")
+
+    if normal:
+        for i, boss_name in normal:
+            info = boss_info[boss_name]
+            target_dt = info["respawn_at"]
+            label = info["label"]
+            lines.append(
+                f"`{i}.` **{boss_name}**  ⏱ {format_remaining(target_dt)}  |  🕐 {target_dt.strftime('%H:%M')}  |  {label}"
+            )
 
     # 비활성화 보스 목록 추가
     bosses = load_bosses()
     config = load_config()
     disabled = [name for name in bosses if not config.get(name, True)]
     if disabled:
-        embed.add_field(
-            name="🔴 알림 비활성화",
-            value="  |  ".join(disabled),
-            inline=False
-        )
+        lines.append("")
+        lines.append("🔴 **알림 비활성화**  " + "  |  ".join(disabled))
 
+    embed = discord.Embed(
+        title="⏰ 리젠 대기 현황",
+        description="\n".join(lines),
+        color=discord.Color.orange()
+    )
     await ctx.send(embed=embed)
 
 
