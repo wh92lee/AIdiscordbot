@@ -7,6 +7,8 @@ import tempfile
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import edge_tts
+import gspread
+from google.oauth2.service_account import Credentials
 
 load_dotenv()
 
@@ -87,6 +89,45 @@ def set_setting(value, *keys):
 
 PREFIX = get_setting("discord", "command_prefix", default="!")
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+
+SPREADSHEET_NAME = "보탐봇테스트"
+SHEET_NAME = "참여율체크"
+CREDENTIALS_FILE = "bsbot-428416-2282f2d345ef.json"
+
+
+def get_sheet():
+    creds = Credentials.from_service_account_file(
+        CREDENTIALS_FILE,
+        scopes=[
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive"
+        ]
+    )
+    gc = gspread.authorize(creds)
+    return gc.open(SPREADSHEET_NAME).worksheet(SHEET_NAME)
+
+
+def record_cut_to_sheet(boss_name):
+    try:
+        sheet = get_sheet()
+        all_values = sheet.get_all_values()
+
+        # 마지막 행 복사
+        last_row = all_values[-1] if all_values else ["", ""]
+        new_row = last_row.copy()
+
+        # A열: 오늘 날짜 (MM/DD 형식)
+        new_row[0] = datetime.now().strftime("%m/%d")
+
+        # B열: 드롭박스에서 보스명 찾아서 입력
+        # gspread는 드롭박스 값을 그냥 문자열로 입력하면 됨
+        new_row[1] = boss_name
+
+        sheet.append_row(new_row)
+        return True
+    except Exception as e:
+        print(f"[시트 기록 오류] {e}")
+        return False
 
 ALLOWED_ROLE = "운영진"
 
@@ -250,6 +291,10 @@ class CutButton(discord.ui.View):
         button.label = f"✅ {interaction.user.display_name} 컷"
         await interaction.response.edit_message(view=self)
 
+        # 구글 시트에 기록
+        loop = asyncio.get_event_loop()
+        sheet_ok = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
+
         embed = discord.Embed(
             title="💀 컷 처리 완료",
             description=f"**{self.boss_name}** 처치 완료!",
@@ -258,6 +303,10 @@ class CutButton(discord.ui.View):
         embed.add_field(name="처치 시각", value=now.strftime("%H:%M"), inline=True)
         embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
         embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
+        if sheet_ok:
+            embed.set_footer(text="✅ 시트 기록 완료")
+        else:
+            embed.set_footer(text="⚠️ 시트 기록 실패")
         await self.channel.send(embed=embed)
 
 
