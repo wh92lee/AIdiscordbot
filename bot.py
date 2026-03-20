@@ -134,60 +134,61 @@ def get_sheet():
 def record_cut_to_sheet(boss_name):
     try:
         sheet = get_sheet()
-        last_row_idx = len(sheet.get_all_values())  # 마지막 데이터 행 번호 (1-based)
-        new_row_idx = last_row_idx + 1
+        INSERT_BEFORE_ROW = 4        # 항상 4행 위에 삽입 (1-based)
+        insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 3
+        new_row_idx = INSERT_BEFORE_ROW       # 삽입 후 새 행의 1-based 번호
 
         cb_range = {
             "sheetId": sheet.id,
-            "startRowIndex": last_row_idx,
-            "endRowIndex": last_row_idx + 1,
+            "startRowIndex": insert_index,
+            "endRowIndex": insert_index + 1,
             "startColumnIndex": 2,
             "endColumnIndex": 44
         }
 
-        # 새 행 삽입 (서식 상속 없이 빈 행)
+        # 4행 위에 새 행 삽입 → 기존 4행이 5행으로 밀림
         try:
             sheet.spreadsheet.batch_update({"requests": [
                 {"insertDimension": {
                     "range": {
                         "sheetId": sheet.id,
                         "dimension": "ROWS",
-                        "startIndex": last_row_idx,
-                        "endIndex": last_row_idx + 1
+                        "startIndex": insert_index,
+                        "endIndex": insert_index + 1
                     },
                     "inheritFromBefore": False
                 }},
-                # 전체 행 서식 복사 (테두리, 글자 서식 등)
+                # 전체 행 서식 복사 (밀린 5행 → 새 4행)
                 {"copyPaste": {
                     "source": {
                         "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx - 1,
-                        "endRowIndex": last_row_idx,
+                        "startRowIndex": insert_index + 1,
+                        "endRowIndex": insert_index + 2,
                         "startColumnIndex": 0,
                         "endColumnIndex": 44
                     },
                     "destination": {
                         "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx,
-                        "endRowIndex": last_row_idx + 1,
+                        "startRowIndex": insert_index,
+                        "endRowIndex": insert_index + 1,
                         "startColumnIndex": 0,
                         "endColumnIndex": 44
                     },
                     "pasteType": "PASTE_FORMAT"
                 }},
-                # B열 드롭박스 유효성 복사
+                # B열 드롭박스 유효성 복사 (밀린 5행 → 새 4행)
                 {"copyPaste": {
                     "source": {
                         "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx - 1,
-                        "endRowIndex": last_row_idx,
+                        "startRowIndex": insert_index + 1,
+                        "endRowIndex": insert_index + 2,
                         "startColumnIndex": 1,
                         "endColumnIndex": 2
                     },
                     "destination": {
                         "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx,
-                        "endRowIndex": last_row_idx + 1,
+                        "startRowIndex": insert_index,
+                        "endRowIndex": insert_index + 1,
                         "startColumnIndex": 1,
                         "endColumnIndex": 2
                     },
@@ -211,8 +212,8 @@ def record_cut_to_sheet(boss_name):
                 {"updateBorders": {
                     "range": {
                         "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx,
-                        "endRowIndex": last_row_idx + 1,
+                        "startRowIndex": insert_index,
+                        "endRowIndex": insert_index + 1,
                         "startColumnIndex": 0,
                         "endColumnIndex": 44
                     },
