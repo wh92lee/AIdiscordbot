@@ -151,6 +151,18 @@ def record_cut_to_sheet(boss_name):
                     },
                     "pasteType": "PASTE_DATA_VALIDATION"
                 }},
+                # B열 가운데 정렬
+                {"repeatCell": {
+                    "range": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx,
+                        "endRowIndex": last_row_idx + 1,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2
+                    },
+                    "cell": {"userEnteredFormat": {"horizontalAlignment": "CENTER"}},
+                    "fields": "userEnteredFormat.horizontalAlignment"
+                }},
                 # C~AR열 체크박스 데이터 유효성 적용
                 {"setDataValidation": {
                     "range": cb_range,
