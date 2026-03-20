@@ -164,6 +164,39 @@ def is_today(cell_value):
     return False
 
 
+def fetch_score_rank():
+    """시트 1행 닉네임 + 2행 참여율을 읽어 높은순 정렬
+    반환: ([(닉네임, 참여율_str), ...], error_msg)
+    """
+    try:
+        sheet = get_sheet()
+        all_values = sheet.get_all_values()
+
+        if len(all_values) < 2:
+            return None, "시트 데이터가 부족합니다."
+
+        header_row = all_values[0]   # 1행: 닉네임
+        rate_row   = all_values[1]   # 2행: 참여율
+
+        result = []
+        for i in range(2, min(44, len(header_row))):
+            nickname = header_row[i].strip()
+            if not nickname:
+                continue
+            rate_str = rate_row[i].strip() if i < len(rate_row) else ""
+            # "85%" → 85.0 으로 변환해서 정렬에 사용
+            try:
+                rate_num = float(rate_str.replace("%", "").strip())
+            except ValueError:
+                rate_num = 0.0
+            result.append((nickname, rate_str, rate_num))
+
+        result.sort(key=lambda x: x[2], reverse=True)
+        return [(name, rate_str) for name, rate_str, _ in result], None
+    except Exception as e:
+        return None, str(e)
+
+
 def fetch_my_score(nickname):
     """시트에서 오늘 날짜 기준 해당 유저의 참여 현황 조회
     반환: ([(보스명, participated), ...], error_msg)
@@ -757,6 +790,11 @@ async def on_message(message):
         await my_score(ctx)
         return
 
+    if message.content.strip() in ("점수", "!점수"):
+        ctx = await bot.get_context(message)
+        await score_rank(ctx)
+        return
+
     if message.content.strip() in ("보스", "ㅄ"):
         if not is_staff(message.author):
             await message.channel.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
@@ -1177,6 +1215,31 @@ async def my_score(ctx):
     await ctx.send(embed=embed)
 
 
+@bot.command(name="점수")
+async def score_rank(ctx):
+    loop = asyncio.get_event_loop()
+    result, error = await loop.run_in_executor(None, fetch_score_rank)
+
+    if error:
+        await ctx.send(f"❌ {error}")
+        return
+
+    if not result:
+        await ctx.send("📋 참여율 데이터가 없습니다.")
+        return
+
+    lines = []
+    for i, (nickname, rate_str) in enumerate(result, start=1):
+        lines.append(f"`{i}.` {nickname}  ({rate_str})")
+
+    embed = discord.Embed(
+        title="🏆 현재까지 참여율",
+        description="\n".join(lines),
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+
 async def show_commands(ctx):
     embed = discord.Embed(
         title="📖 명령어 목록",
@@ -1198,7 +1261,8 @@ async def show_commands(ctx):
         value=(
             "`보스` 또는 `ㅄ` — 현재 대기 중인 보스 현황\n"
             "`!보스목록` — 전체 보스 및 리젠 시간 목록\n"
-            "`내점수` 또는 `!내점수` — 금일 참여현황 조회"
+            "`내점수` 또는 `!내점수` — 금일 참여현황 조회\n"
+            "`점수` 또는 `!점수` — 현재까지 참여율 순위"
         ),
         inline=False
     )
