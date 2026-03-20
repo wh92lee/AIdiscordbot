@@ -133,7 +133,25 @@ def record_cut_to_sheet(boss_name):
                     },
                     "inheritFromBefore": False
                 }},
-                # B열 드롭박스 유효성을 윗 행에서 복사
+                # 전체 행 서식 복사 (테두리, 글자 서식 등)
+                {"copyPaste": {
+                    "source": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx - 1,
+                        "endRowIndex": last_row_idx,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 44
+                    },
+                    "destination": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx,
+                        "endRowIndex": last_row_idx + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 44
+                    },
+                    "pasteType": "PASTE_FORMAT"
+                }},
+                # B열 드롭박스 유효성 복사
                 {"copyPaste": {
                     "source": {
                         "sheetId": sheet.id,
@@ -151,17 +169,11 @@ def record_cut_to_sheet(boss_name):
                     },
                     "pasteType": "PASTE_DATA_VALIDATION"
                 }},
-                # B열 가운데 정렬
+                # C~AR열 숫자 서식 초기화 (PASTE_FORMAT으로 TEXT 서식이 복사될 경우 방지)
                 {"repeatCell": {
-                    "range": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx,
-                        "endRowIndex": last_row_idx + 1,
-                        "startColumnIndex": 1,
-                        "endColumnIndex": 2
-                    },
-                    "cell": {"userEnteredFormat": {"horizontalAlignment": "CENTER"}},
-                    "fields": "userEnteredFormat.horizontalAlignment"
+                    "range": cb_range,
+                    "cell": {"userEnteredFormat": {"numberFormat": {}}},
+                    "fields": "userEnteredFormat.numberFormat"
                 }},
                 # C~AR열 체크박스 데이터 유효성 적용
                 {"setDataValidation": {
