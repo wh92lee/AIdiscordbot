@@ -406,9 +406,10 @@ class CutButton(discord.ui.View):
         self.processing = True
 
         now = datetime.now()
-        next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
 
-        register_alert(self.channel, self.boss_name, next_respawn_dt, "처치 기반")
+        if self.respawn_minutes > 0:
+            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
+            register_alert(self.channel, self.boss_name, next_respawn_dt, "처치 기반")
 
         button.disabled = True
         button.label = f"✅ {interaction.user.display_name} 컷"
@@ -432,8 +433,10 @@ class CutButton(discord.ui.View):
             color=discord.Color.green()
         )
         embed.add_field(name="처치 시각", value=now.strftime("%H:%M"), inline=True)
-        embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
-        embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
+        if self.respawn_minutes > 0:
+            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
+            embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
+            embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
         if sheet_ok:
             embed.set_footer(text="✅ 시트 기록 완료")
         else:
@@ -561,7 +564,9 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     embed.add_field(name="등록 방식", value=label, inline=True)
     embed.add_field(name="리젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
 
-    view = None if auto_renew else (CutButton(boss_name, respawn_minutes, channel) if respawn_minutes else None)
+    score = get_boss_score(boss_name)
+    show_cut = not auto_renew and (respawn_minutes > 0 or score > 0)
+    view = CutButton(boss_name, respawn_minutes, channel) if show_cut else None
     await channel.send("@here", embed=embed, view=view)
     await play_tts(channel, f"{boss_name} 시간입니다.")
     await send_kakao_alert(boss_name, "spawn")
