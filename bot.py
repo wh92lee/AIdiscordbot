@@ -137,15 +137,9 @@ def record_cut_to_sheet(boss_name):
         })
 
         # A열: 오늘 날짜, B열: 보스명, C~AR열: 체크박스 False
-        updates = [
-            {"range": f"A{new_row_idx}", "values": [[datetime.now().strftime("%m/%d")]]},
-            {"range": f"B{new_row_idx}", "values": [[boss_name]]},
-            {"range": f"C{new_row_idx}:AR{new_row_idx}", "values": [[False] * 42]},
-        ]
-        sheet.spreadsheet.values_batch_update({
-            "valueInputOption": "USER_ENTERED",
-            "data": updates
-        })
+        sheet.update([[datetime.now().strftime("%m/%d")]], f"A{new_row_idx}", value_input_option="USER_ENTERED")
+        sheet.update([[boss_name]], f"B{new_row_idx}", value_input_option="USER_ENTERED")
+        sheet.update([[False] * 42], f"C{new_row_idx}:AR{new_row_idx}", value_input_option="USER_ENTERED")
 
         return True
     except Exception as e:
@@ -302,9 +296,15 @@ class CutButton(discord.ui.View):
         self.boss_name = boss_name
         self.respawn_minutes = respawn_minutes
         self.channel = channel
+        self.processing = False
 
     @discord.ui.button(label="⚔️ 컷!", style=discord.ButtonStyle.danger)
     async def cut(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.processing:
+            await interaction.response.defer()
+            return
+        self.processing = True
+
         now = datetime.now()
         next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
 
