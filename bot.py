@@ -294,50 +294,51 @@ def load_respawn_data():
 
 # ────────── bosses.txt ──────────
 
-def load_bosses():
-    bosses = {}
+def _parse_boss_lines():
+    """bosses.txt 전체 파싱 → [(chapter, name, minutes, score), ...]"""
+    result = []
     with open("bosses.txt", "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
             parts = line.split("|")
-            if len(parts) == 3:
+            if len(parts) >= 3:
+                chapter = parts[0].strip()
                 name = parts[1].strip()
                 minutes = int(parts[2].strip())
-                bosses[name] = minutes
-    return bosses
+                score = int(parts[3].strip()) if len(parts) >= 4 else 1
+                result.append((chapter, name, minutes, score))
+    return result
+
+
+def load_bosses():
+    return {name: minutes for _, name, minutes, _ in _parse_boss_lines()}
 
 
 def load_bosses_by_chapter():
     """챕터별로 그룹화된 보스 목록 반환 {chapter: [(name, minutes), ...]}"""
     from collections import OrderedDict
     chapters = OrderedDict()
-    with open("bosses.txt", "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("|")
-            if len(parts) == 3:
-                chapter = parts[0].strip()
-                name = parts[1].strip()
-                minutes = int(parts[2].strip())
-                chapters.setdefault(chapter, []).append((name, minutes))
+    for chapter, name, minutes, _ in _parse_boss_lines():
+        chapters.setdefault(chapter, []).append((name, minutes))
     return chapters
 
 
 def get_boss_chapter(boss_name):
     """보스 이름으로 챕터 번호 반환 (없으면 None)"""
-    with open("bosses.txt", "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("|")
-            if len(parts) == 3 and parts[1].strip() == boss_name:
-                return parts[0].strip()
+    for chapter, name, _, _ in _parse_boss_lines():
+        if name == boss_name:
+            return chapter
     return None
+
+
+def get_boss_score(boss_name):
+    """보스 이름으로 점수 반환 (없으면 0)"""
+    for _, name, _, score in _parse_boss_lines():
+        if name == boss_name:
+            return score
+    return 0
 
 
 def find_boss(name, bosses):
@@ -413,9 +414,17 @@ class CutButton(discord.ui.View):
         button.label = f"✅ {interaction.user.display_name} 컷"
         await interaction.response.edit_message(view=self)
 
-        # 구글 시트에 기록
+        # 구글 시트에 기록 (점수만큼 행 추가)
         loop = asyncio.get_event_loop()
-        sheet_ok = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
+        score = get_boss_score(self.boss_name)
+        if score > 0:
+            results = await asyncio.gather(*[
+                loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
+                for _ in range(score)
+            ])
+            sheet_ok = all(results)
+        else:
+            sheet_ok = True
 
         embed = discord.Embed(
             title="💀 컷 처리 완료",
