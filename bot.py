@@ -112,18 +112,23 @@ def record_cut_to_sheet(boss_name):
         sheet = get_sheet()
         all_values = sheet.get_all_values()
 
-        # 마지막 행 복사
-        last_row = all_values[-1] if all_values else ["", ""]
+        # 마지막 행 복사 (AR열까지 = 44칸 확보)
+        last_row = all_values[-1] if all_values else []
         new_row = last_row.copy()
+        while len(new_row) < 44:
+            new_row.append("")
 
         # A열: 오늘 날짜 (MM/DD 형식)
         new_row[0] = datetime.now().strftime("%m/%d")
 
-        # B열: 드롭박스에서 보스명 찾아서 입력
-        # gspread는 드롭박스 값을 그냥 문자열로 입력하면 됨
+        # B열: 드롭박스 보스명
         new_row[1] = boss_name
 
-        sheet.append_row(new_row)
+        # C열(index 2) ~ AR열(index 43): 체크박스 False로 초기화
+        for i in range(2, 44):
+            new_row[i] = False
+
+        sheet.append_row(new_row, value_input_option="USER_ENTERED")
         return True
     except Exception as e:
         print(f"[시트 기록 오류] {e}")
