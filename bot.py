@@ -10,7 +10,7 @@ import edge_tts
 import gspread
 from google.oauth2.service_account import Credentials
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 intents = discord.Intents.default()
 intents.message_content = True
