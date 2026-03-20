@@ -406,26 +406,23 @@ class CutButton(discord.ui.View):
         self.processing = True
 
         now = datetime.now()
+        score = get_boss_score(self.boss_name)
 
         if self.respawn_minutes > 0:
             next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
-            register_alert(self.channel, self.boss_name, next_respawn_dt, "처치 기반")
-
-        button.disabled = True
-        button.label = f"✅ {interaction.user.display_name} 컷"
-        await interaction.response.edit_message(view=self)
-
-        # 구글 시트에 기록 (점수만큼 행 추가, 순차 실행으로 race condition 방지)
-        loop = asyncio.get_event_loop()
-        score = get_boss_score(self.boss_name)
-        if score > 0:
+            register_alert(self.channel, self.boss_name, next_respawn_dt, "처치 기반", record_sheet=True)
+        elif score > 0:
+            # 리젠시간 0인 보스(챕터 13)는 젠 알림이 없으므로 컷 시점에 즉시 시트 기록
+            loop = asyncio.get_event_loop()
             sheet_ok = True
             for _ in range(score):
                 result = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
                 if not result:
                     sheet_ok = False
-        else:
-            sheet_ok = True
+
+        button.disabled = True
+        button.label = f"✅ {interaction.user.display_name} 컷"
+        await interaction.response.edit_message(view=self)
 
         embed = discord.Embed(
             title="💀 컷 처리 완료",
@@ -437,10 +434,7 @@ class CutButton(discord.ui.View):
             next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
             embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
             embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
-        if sheet_ok:
-            embed.set_footer(text="✅ 시트 기록 완료")
-        else:
-            embed.set_footer(text="⚠️ 시트 기록 실패")
+            embed.set_footer(text="⏳ 시트 기록은 젠 알림 후 자동 처리됩니다")
         await self.channel.send(embed=embed)
 
 
@@ -532,7 +526,7 @@ async def play_tts(text_channel, text):
 
 # ────────── 알림 스케줄링 ──────────
 
-async def schedule_notify(channel, boss_name, target_dt, label):
+async def schedule_notify(channel, boss_name, target_dt, label, record_sheet=False):
     # 5분 전 단독 알림
     warning_secs = (target_dt - timedelta(minutes=5) - datetime.now()).total_seconds()
     if warning_secs > 0:
@@ -570,6 +564,20 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     await channel.send("@here", embed=embed, view=view)
     await play_tts(channel, f"{boss_name} 시간입니다.")
     await send_kakao_alert(boss_name, "spawn")
+
+    # 컷 버튼으로 등록된 경우 젠 알림 후 시트 기록
+    if record_sheet and score > 0:
+        loop = asyncio.get_event_loop()
+        sheet_ok = True
+        for _ in range(score):
+            result = await loop.run_in_executor(None, record_cut_to_sheet, boss_name)
+            if not result:
+                sheet_ok = False
+        sheet_embed = discord.Embed(
+            description="✅ 시트 기록 완료" if sheet_ok else "⚠️ 시트 기록 실패",
+            color=discord.Color.green() if sheet_ok else discord.Color.red()
+        )
+        await channel.send(embed=sheet_embed)
 
     pending_tasks.pop(boss_name, None)
     boss_info.pop(boss_name, None)
@@ -653,12 +661,12 @@ def recalculate_group_warnings(channel):
         group_warning_tasks[key] = task
 
 
-def register_alert(channel, boss_name, target_dt, label):
+def register_alert(channel, boss_name, target_dt, label, record_sheet=False):
     if boss_name in pending_tasks:
         pending_tasks[boss_name].cancel()
 
     boss_info[boss_name] = {"respawn_at": target_dt, "label": label}
-    task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label))
+    task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label, record_sheet))
     pending_tasks[boss_name] = task
 
     save_respawn_entry(boss_name, target_dt, label, channel.id)
