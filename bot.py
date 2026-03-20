@@ -90,9 +90,33 @@ def set_setting(value, *keys):
 PREFIX = get_setting("discord", "command_prefix", default="!")
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
+KAKAO_SERVER_URL = get_setting("kakao", "server_url", default="")
+KAKAO_TOKEN      = get_setting("kakao", "token", default="bsbot-kakao-token")
+
 SPREADSHEET_NAME = "보탐봇테스트"
 SHEET_NAME = "참여율체크"
 CREDENTIALS_FILE = "bsbot-428416-2282f2d345ef.json"
+
+
+async def send_kakao_alert(boss_name, alert_type):
+    """카카오톡 로컬 서버로 알림 전송 (server_url 미설정 시 스킵)"""
+    if not KAKAO_SERVER_URL:
+        return
+    try:
+        import urllib.request
+        import json as _json
+        body = _json.dumps({"boss": boss_name, "type": alert_type}).encode()
+        req = urllib.request.Request(
+            f"{KAKAO_SERVER_URL}/alert",
+            data=body,
+            headers={"Content-Type": "application/json", "X-Token": KAKAO_TOKEN},
+            method="POST"
+        )
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, urllib.request.urlopen, req)
+        print(f"[카카오] {alert_type} 알림 전송: {boss_name}")
+    except Exception as e:
+        print(f"[카카오] 전송 실패: {e}")
 
 
 def get_sheet():
@@ -492,6 +516,7 @@ async def schedule_notify(channel, boss_name, target_dt, label):
         embed.add_field(name="젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
         await channel.send("@here", embed=embed)
         await play_tts(channel, f"{boss_name} 5분 전 입니다.")
+        await send_kakao_alert(boss_name, "5min")
 
     remaining = (target_dt - datetime.now()).total_seconds()
     if remaining > 0:
@@ -513,6 +538,7 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     view = None if auto_renew else (CutButton(boss_name, respawn_minutes, channel) if respawn_minutes else None)
     await channel.send("@here", embed=embed, view=view)
     await play_tts(channel, f"{boss_name} 시간입니다.")
+    await send_kakao_alert(boss_name, "spawn")
 
     pending_tasks.pop(boss_name, None)
     boss_info.pop(boss_name, None)
