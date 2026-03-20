@@ -830,7 +830,7 @@ async def on_message(message):
         await show_commands(ctx)
         return
 
-    if message.content.strip() in ("참여", "!내참여"):
+    if message.content.strip() in ("참여", "내참여", "!내참여"):
         ctx = await bot.get_context(message)
         await my_score(ctx)
         return
