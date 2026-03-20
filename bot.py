@@ -415,15 +415,15 @@ class CutButton(discord.ui.View):
         button.label = f"✅ {interaction.user.display_name} 컷"
         await interaction.response.edit_message(view=self)
 
-        # 구글 시트에 기록 (점수만큼 행 추가)
+        # 구글 시트에 기록 (점수만큼 행 추가, 순차 실행으로 race condition 방지)
         loop = asyncio.get_event_loop()
         score = get_boss_score(self.boss_name)
         if score > 0:
-            results = await asyncio.gather(*[
-                loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
-                for _ in range(score)
-            ])
-            sheet_ok = all(results)
+            sheet_ok = True
+            for _ in range(score):
+                result = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
+                if not result:
+                    sheet_ok = False
         else:
             sheet_ok = True
 
