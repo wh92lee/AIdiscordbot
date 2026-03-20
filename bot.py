@@ -113,28 +113,27 @@ def record_cut_to_sheet(boss_name):
         last_row_idx = len(sheet.get_all_values())  # 마지막 데이터 행 번호 (1-based)
         new_row_idx = last_row_idx + 1
 
-        # 마지막 행을 아래 행으로 서식 포함 복사 (copyPaste)
-        sheet.spreadsheet.batch_update({
-            "requests": [{
-                "copyPaste": {
-                    "source": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx - 1,
-                        "endRowIndex": last_row_idx,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 44
-                    },
-                    "destination": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": new_row_idx - 1,
-                        "endRowIndex": new_row_idx,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 44
-                    },
-                    "pasteType": "PASTE_NORMAL"
-                }
-            }]
-        })
+        # 마지막 행 서식(체크박스 포함) + 데이터 유효성 복사
+        copy_request = {
+            "source": {
+                "sheetId": sheet.id,
+                "startRowIndex": last_row_idx - 1,
+                "endRowIndex": last_row_idx,
+                "startColumnIndex": 0,
+                "endColumnIndex": 44
+            },
+            "destination": {
+                "sheetId": sheet.id,
+                "startRowIndex": new_row_idx - 1,
+                "endRowIndex": new_row_idx,
+                "startColumnIndex": 0,
+                "endColumnIndex": 44
+            }
+        }
+        sheet.spreadsheet.batch_update({"requests": [
+            {"copyPaste": {**copy_request, "pasteType": "PASTE_FORMAT"}},
+            {"copyPaste": {**copy_request, "pasteType": "PASTE_DATA_VALIDATION"}},
+        ]})
 
         # A열: 오늘 날짜, B열: 보스명, C~AR열: 체크박스 False
         sheet.update([[datetime.now().strftime("%m/%d")]], f"A{new_row_idx}", value_input_option="USER_ENTERED")
