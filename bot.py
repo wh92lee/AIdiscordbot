@@ -752,7 +752,7 @@ async def on_message(message):
         await show_commands(ctx)
         return
 
-    if message.content.strip() in ("내점수", "!내점수", "점수", "!점수"):
+    if message.content.strip() in ("내점수", "!내점수"):
         ctx = await bot.get_context(message)
         await my_score(ctx)
         return
@@ -1142,7 +1142,7 @@ async def reset_all(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command(name="내점수", aliases=["점수"])
+@bot.command(name="내점수")
 async def my_score(ctx):
     nickname = extract_nickname(ctx.author.display_name)
     loop = asyncio.get_event_loop()
