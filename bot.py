@@ -131,6 +131,50 @@ def get_sheet():
     return gc.open(SPREADSHEET_NAME).worksheet(SHEET_NAME)
 
 
+def extract_nickname(display_name):
+    """헤1/해운대Z/닉네임 형식에서 닉네임 추출"""
+    parts = display_name.strip().split("/")
+    return parts[-1].strip()
+
+
+def fetch_my_score(nickname):
+    """시트에서 오늘 날짜 기준 해당 유저의 참여 현황 조회
+    반환: ([(보스명, participated), ...], error_msg)
+    """
+    try:
+        sheet = get_sheet()
+        all_values = sheet.get_all_values()
+
+        if not all_values:
+            return None, "시트가 비어있습니다."
+
+        header_row = all_values[0]  # 1행 (0-based: index 0)
+        today = datetime.now().strftime("%m/%d")
+
+        # C열(index 2) ~ AR열(index 43)에서 닉네임 매칭
+        user_col = None
+        for i in range(2, min(44, len(header_row))):
+            if header_row[i].strip() == nickname:
+                user_col = i
+                break
+
+        if user_col is None:
+            return None, f"'{nickname}' 을(를) 시트 1행에서 찾을 수 없습니다."
+
+        # 오늘 날짜 행 필터링
+        today_rows = []
+        for row in all_values[1:]:
+            if not row or row[0].strip() != today:
+                continue
+            boss_name = row[1].strip() if len(row) > 1 else "?"
+            participated = row[user_col].strip().upper() == "TRUE" if len(row) > user_col else False
+            today_rows.append((boss_name, participated))
+
+        return today_rows, None
+    except Exception as e:
+        return None, str(e)
+
+
 def record_cut_to_sheet(boss_name, score=1):
     """score만큼 행을 한 번의 batch_update로 삽입"""
     try:
@@ -682,6 +726,11 @@ async def on_message(message):
         await show_commands(ctx)
         return
 
+    if message.content.strip() in ("내점수", "!내점수", "점수", "!점수"):
+        ctx = await bot.get_context(message)
+        await my_score(ctx)
+        return
+
     if message.content.strip() in ("보스", "ㅄ"):
         if not is_staff(message.author):
             await message.channel.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
@@ -1067,6 +1116,41 @@ async def reset_all(ctx):
     await ctx.send(embed=embed)
 
 
+@bot.command(name="내점수", aliases=["점수"])
+async def my_score(ctx):
+    nickname = extract_nickname(ctx.author.display_name)
+    loop = asyncio.get_event_loop()
+    today_rows, error = await loop.run_in_executor(None, fetch_my_score, nickname)
+
+    if error:
+        await ctx.send(f"❌ {error}")
+        return
+
+    today = datetime.now().strftime("%m/%d")
+
+    if not today_rows:
+        await ctx.send(f"📋 오늘({today}) 기록된 보스가 없습니다.")
+        return
+
+    lines = []
+    participated_count = 0
+    for boss_name, participated in today_rows:
+        if participated:
+            lines.append(f"✅ {boss_name}  참여")
+            participated_count += 1
+        else:
+            lines.append(f"❌ {boss_name}  미참")
+
+    embed = discord.Embed(
+        title="📊 금일 참여현황",
+        description="\n".join(lines),
+        color=discord.Color.blurple()
+    )
+    embed.set_author(name=nickname)
+    embed.set_footer(text=f"{today}  |  총 {len(today_rows)}보스 중 {participated_count}개 참여")
+    await ctx.send(embed=embed)
+
+
 async def show_commands(ctx):
     embed = discord.Embed(
         title="📖 명령어 목록",
@@ -1087,7 +1171,8 @@ async def show_commands(ctx):
         name="📋 조회",
         value=(
             "`보스` 또는 `ㅄ` — 현재 대기 중인 보스 현황\n"
-            "`!보스목록` — 전체 보스 및 리젠 시간 목록"
+            "`!보스목록` — 전체 보스 및 리젠 시간 목록\n"
+            "`내점수` 또는 `!내점수` — 금일 참여현황 조회"
         ),
         inline=False
     )
