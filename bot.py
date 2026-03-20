@@ -133,6 +133,24 @@ def record_cut_to_sheet(boss_name):
                     },
                     "inheritFromBefore": False
                 }},
+                # B열 드롭박스 유효성을 윗 행에서 복사
+                {"copyPaste": {
+                    "source": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx - 1,
+                        "endRowIndex": last_row_idx,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2
+                    },
+                    "destination": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx,
+                        "endRowIndex": last_row_idx + 1,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2
+                    },
+                    "pasteType": "PASTE_DATA_VALIDATION"
+                }},
                 # C~AR열 체크박스 데이터 유효성 적용
                 {"setDataValidation": {
                     "range": cb_range,
@@ -142,7 +160,7 @@ def record_cut_to_sheet(boss_name):
                     }
                 }}
             ]})
-            print(f"[시트] 행 삽입 + 체크박스 유효성 적용 완료 (행 {new_row_idx})")
+            print(f"[시트] 행 삽입 + 유효성 적용 완료 (행 {new_row_idx})")
         except Exception as e:
             print(f"[시트] 행 삽입 실패: {e}")
             raise
