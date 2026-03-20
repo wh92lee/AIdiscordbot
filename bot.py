@@ -131,17 +131,25 @@ def record_cut_to_sheet(boss_name):
             print(f"[시트] 행 삽입 실패: {e}")
             raise
 
-        # C~AR열 체크박스 데이터 유효성 명시 적용
+        # C~AR열 텍스트 서식 제거 + 체크박스 데이터 유효성 명시 적용
+        cb_range = {
+            "sheetId": sheet.id,
+            "startRowIndex": last_row_idx,
+            "endRowIndex": last_row_idx + 1,
+            "startColumnIndex": 2,
+            "endColumnIndex": 44
+        }
         try:
             sheet.spreadsheet.batch_update({"requests": [
+                # 셀 서식을 "일반"으로 초기화 (텍스트 서식 제거)
+                {"repeatCell": {
+                    "range": cb_range,
+                    "cell": {"userEnteredFormat": {"numberFormat": {}}},
+                    "fields": "userEnteredFormat.numberFormat"
+                }},
+                # 체크박스 데이터 유효성 적용
                 {"setDataValidation": {
-                    "range": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": last_row_idx,
-                        "endRowIndex": last_row_idx + 1,
-                        "startColumnIndex": 2,
-                        "endColumnIndex": 44
-                    },
+                    "range": cb_range,
                     "rule": {
                         "condition": {"type": "BOOLEAN"},
                         "strict": True
