@@ -643,7 +643,9 @@ async def on_ready():
             missed.append((boss_name, target_dt))
             delete_respawn_entry(boss_name)
         else:
-            # 아직 리젠 전 → 알림 재등록
+            # 아직 리젠 전 → 알림 재등록 (기존 태스크 있으면 취소 후 재생성)
+            if boss_name in pending_tasks:
+                pending_tasks[boss_name].cancel()
             boss_info[boss_name] = {"respawn_at": target_dt, "label": label}
             task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label))
             pending_tasks[boss_name] = task
