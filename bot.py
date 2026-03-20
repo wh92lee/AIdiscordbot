@@ -131,114 +131,117 @@ def get_sheet():
     return gc.open(SPREADSHEET_NAME).worksheet(SHEET_NAME)
 
 
-def record_cut_to_sheet(boss_name):
+def record_cut_to_sheet(boss_name, score=1):
+    """score만큼 행을 한 번의 batch_update로 삽입"""
     try:
         sheet = get_sheet()
-        INSERT_BEFORE_ROW = 4        # 항상 4행 위에 삽입 (1-based)
+        INSERT_BEFORE_ROW = 4       # 항상 4행 위에 삽입 (1-based)
         insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 3
-        new_row_idx = INSERT_BEFORE_ROW       # 삽입 후 새 행의 1-based 번호
 
-        cb_range = {
-            "sheetId": sheet.id,
-            "startRowIndex": insert_index,
-            "endRowIndex": insert_index + 1,
-            "startColumnIndex": 2,
-            "endColumnIndex": 44
-        }
+        # score행 한 번에 삽입 후 밀린 행 위치
+        pushed_index = insert_index + score   # 0-based
 
-        # 4행 위에 새 행 삽입 → 기존 4행이 5행으로 밀림
-        try:
-            sheet.spreadsheet.batch_update({"requests": [
-                {"insertDimension": {
-                    "range": {
-                        "sheetId": sheet.id,
-                        "dimension": "ROWS",
-                        "startIndex": insert_index,
-                        "endIndex": insert_index + 1
-                    },
-                    "inheritFromBefore": False
-                }},
-                # 전체 행 서식 복사 (밀린 5행 → 새 4행)
-                {"copyPaste": {
-                    "source": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": insert_index + 1,
-                        "endRowIndex": insert_index + 2,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 44
-                    },
-                    "destination": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": insert_index,
-                        "endRowIndex": insert_index + 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 44
-                    },
-                    "pasteType": "PASTE_FORMAT"
-                }},
-                # B열 드롭박스 유효성 복사 (밀린 5행 → 새 4행)
-                {"copyPaste": {
-                    "source": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": insert_index + 1,
-                        "endRowIndex": insert_index + 2,
-                        "startColumnIndex": 1,
-                        "endColumnIndex": 2
-                    },
-                    "destination": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": insert_index,
-                        "endRowIndex": insert_index + 1,
-                        "startColumnIndex": 1,
-                        "endColumnIndex": 2
-                    },
-                    "pasteType": "PASTE_DATA_VALIDATION"
-                }},
-                # C~AR열 숫자 서식 초기화 (PASTE_FORMAT으로 TEXT 서식이 복사될 경우 방지)
-                {"repeatCell": {
-                    "range": cb_range,
-                    "cell": {"userEnteredFormat": {"numberFormat": {}}},
-                    "fields": "userEnteredFormat.numberFormat"
-                }},
-                # C~AR열 체크박스 데이터 유효성 적용
-                {"setDataValidation": {
-                    "range": cb_range,
-                    "rule": {
-                        "condition": {"type": "BOOLEAN"},
-                        "strict": True
-                    }
-                }},
-                # 전체 행(A~AR) 전체 테두리 적용
-                {"updateBorders": {
-                    "range": {
-                        "sheetId": sheet.id,
-                        "startRowIndex": insert_index,
-                        "endRowIndex": insert_index + 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 44
-                    },
-                    "top":    {"style": "SOLID", "width": 1},
-                    "bottom": {"style": "SOLID", "width": 1},
-                    "left":   {"style": "SOLID", "width": 1},
-                    "right":  {"style": "SOLID", "width": 1},
-                    "innerHorizontal": {"style": "SOLID", "width": 1},
-                    "innerVertical":   {"style": "SOLID", "width": 1}
-                }}
-            ]})
-            print(f"[시트] 행 삽입 완료 (행 {new_row_idx})")
-            print(f"[시트] 서식 복사 완료 (테두리, 글자 서식, 드롭박스, 체크박스)")
-        except Exception as e:
-            print(f"[시트] 행 삽입/서식 복사 실패: {e}")
-            raise
+        sheet.spreadsheet.batch_update({"requests": [
+            # score행 한 번에 삽입
+            {"insertDimension": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "dimension": "ROWS",
+                    "startIndex": insert_index,
+                    "endIndex": insert_index + score
+                },
+                "inheritFromBefore": False
+            }},
+            # 밀린 행 서식을 새 행 전체에 복사
+            {"copyPaste": {
+                "source": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": pushed_index,
+                    "endRowIndex": pushed_index + 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 44
+                },
+                "destination": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": insert_index,
+                    "endRowIndex": insert_index + score,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 44
+                },
+                "pasteType": "PASTE_FORMAT"
+            }},
+            # B열 드롭박스 유효성 복사
+            {"copyPaste": {
+                "source": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": pushed_index,
+                    "endRowIndex": pushed_index + 1,
+                    "startColumnIndex": 1,
+                    "endColumnIndex": 2
+                },
+                "destination": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": insert_index,
+                    "endRowIndex": insert_index + score,
+                    "startColumnIndex": 1,
+                    "endColumnIndex": 2
+                },
+                "pasteType": "PASTE_DATA_VALIDATION"
+            }},
+            # C~AR열 숫자 서식 초기화
+            {"repeatCell": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": insert_index,
+                    "endRowIndex": insert_index + score,
+                    "startColumnIndex": 2,
+                    "endColumnIndex": 44
+                },
+                "cell": {"userEnteredFormat": {"numberFormat": {}}},
+                "fields": "userEnteredFormat.numberFormat"
+            }},
+            # C~AR열 체크박스 데이터 유효성 적용
+            {"setDataValidation": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": insert_index,
+                    "endRowIndex": insert_index + score,
+                    "startColumnIndex": 2,
+                    "endColumnIndex": 44
+                },
+                "rule": {
+                    "condition": {"type": "BOOLEAN"},
+                    "strict": True
+                }
+            }},
+            # 전체 테두리 적용
+            {"updateBorders": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": insert_index,
+                    "endRowIndex": insert_index + score,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 44
+                },
+                "top":    {"style": "SOLID", "width": 1},
+                "bottom": {"style": "SOLID", "width": 1},
+                "left":   {"style": "SOLID", "width": 1},
+                "right":  {"style": "SOLID", "width": 1},
+                "innerHorizontal": {"style": "SOLID", "width": 1},
+                "innerVertical":   {"style": "SOLID", "width": 1}
+            }}
+        ]})
+        print(f"[시트] {score}행 삽입 및 서식 복사 완료 (행 {INSERT_BEFORE_ROW}~{INSERT_BEFORE_ROW + score - 1})")
 
-        # A열: 오늘 날짜, B열: 보스명 (C~AR은 체크박스 기본값 미체크)
-        try:
-            sheet.update([[datetime.now().strftime("%m/%d")]], f"A{new_row_idx}", value_input_option="USER_ENTERED")
-            sheet.update([[boss_name]], f"B{new_row_idx}", value_input_option="USER_ENTERED")
-            print(f"[시트] 값 입력 완료 (날짜: {datetime.now().strftime('%m/%d')}, 보스: {boss_name})")
-        except Exception as e:
-            print(f"[시트] 값 입력 실패: {e}")
-            raise
+        # A/B열 값 한 번에 입력
+        today = datetime.now().strftime("%m/%d")
+        values = [[today, boss_name]] * score
+        sheet.update(
+            f"A{INSERT_BEFORE_ROW}:B{INSERT_BEFORE_ROW + score - 1}",
+            values,
+            value_input_option="USER_ENTERED"
+        )
+        print(f"[시트] 값 입력 완료 (날짜: {today}, 보스: {boss_name}, {score}행)")
 
         return True
     except Exception as e:
@@ -414,11 +417,7 @@ class CutButton(discord.ui.View):
         elif score > 0:
             # 리젠시간 0인 보스(챕터 13)는 젠 알림이 없으므로 컷 시점에 즉시 시트 기록
             loop = asyncio.get_event_loop()
-            sheet_ok = True
-            for _ in range(score):
-                result = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name)
-                if not result:
-                    sheet_ok = False
+            sheet_ok = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name, score)
 
         button.disabled = True
         button.label = f"✅ {interaction.user.display_name} 컷"
@@ -567,11 +566,7 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     # 젠 알림 시 시트 기록 (score > 0인 보스만)
     if score > 0:
         loop = asyncio.get_event_loop()
-        sheet_ok = True
-        for _ in range(score):
-            result = await loop.run_in_executor(None, record_cut_to_sheet, boss_name)
-            if not result:
-                sheet_ok = False
+        sheet_ok = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
         sheet_embed = discord.Embed(
             description="✅ 시트 기록 완료" if sheet_ok else "⚠️ 시트 기록 실패",
             color=discord.Color.green() if sheet_ok else discord.Color.red()
