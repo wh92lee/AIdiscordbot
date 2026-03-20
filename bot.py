@@ -138,18 +138,30 @@ def extract_nickname(display_name):
 
 
 def is_today(cell_value):
-    """시트 날짜 셀이 오늘인지 확인 (3/20, 03/20, 3/20/2026 등 다양한 형식 대응)"""
+    """시트 날짜 셀이 오늘인지 확인
+    지원 형식: 3/20, 03/20, 3/20/2026, 2026. 3. 20 등
+    """
     now = datetime.now()
     cell = cell_value.strip()
+
+    # "2026. 3. 20" 형식 (점+공백 구분)
+    if ". " in cell:
+        parts = [p.strip().rstrip(".") for p in cell.split(".") if p.strip().rstrip(".")]
+        try:
+            if len(parts) == 3:
+                return int(parts[1]) == now.month and int(parts[2]) == now.day
+        except ValueError:
+            pass
+
+    # "3/20", "03/20", "3/20/2026" 형식 (슬래시 구분)
     parts = cell.split("/")
-    if len(parts) < 2:
-        return False
-    try:
-        month = int(parts[0])
-        day = int(parts[1])
-        return month == now.month and day == now.day
-    except ValueError:
-        return False
+    if len(parts) >= 2:
+        try:
+            return int(parts[0]) == now.month and int(parts[1]) == now.day
+        except ValueError:
+            pass
+
+    return False
 
 
 def fetch_my_score(nickname):
