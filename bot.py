@@ -113,7 +113,15 @@ def record_cut_to_sheet(boss_name):
         last_row_idx = len(sheet.get_all_values())  # 마지막 데이터 행 번호 (1-based)
         new_row_idx = last_row_idx + 1
 
-        # 새 행 삽입
+        cb_range = {
+            "sheetId": sheet.id,
+            "startRowIndex": last_row_idx,
+            "endRowIndex": last_row_idx + 1,
+            "startColumnIndex": 2,
+            "endColumnIndex": 44
+        }
+
+        # 새 행 삽입 (서식 상속 없이 빈 행)
         try:
             sheet.spreadsheet.batch_update({"requests": [
                 {"insertDimension": {
@@ -123,31 +131,9 @@ def record_cut_to_sheet(boss_name):
                         "startIndex": last_row_idx,
                         "endIndex": last_row_idx + 1
                     },
-                    "inheritFromBefore": True
-                }}
-            ]})
-            print(f"[시트] 행 삽입 완료 (행 {new_row_idx})")
-        except Exception as e:
-            print(f"[시트] 행 삽입 실패: {e}")
-            raise
-
-        # C~AR열 텍스트 서식 제거 + 체크박스 데이터 유효성 명시 적용
-        cb_range = {
-            "sheetId": sheet.id,
-            "startRowIndex": last_row_idx,
-            "endRowIndex": last_row_idx + 1,
-            "startColumnIndex": 2,
-            "endColumnIndex": 44
-        }
-        try:
-            sheet.spreadsheet.batch_update({"requests": [
-                # 셀 서식을 "일반"으로 초기화 (텍스트 서식 제거)
-                {"repeatCell": {
-                    "range": cb_range,
-                    "cell": {"userEnteredFormat": {"numberFormat": {}}},
-                    "fields": "userEnteredFormat.numberFormat"
+                    "inheritFromBefore": False
                 }},
-                # 체크박스 데이터 유효성 적용
+                # C~AR열 체크박스 데이터 유효성 적용
                 {"setDataValidation": {
                     "range": cb_range,
                     "rule": {
@@ -156,16 +142,15 @@ def record_cut_to_sheet(boss_name):
                     }
                 }}
             ]})
-            print(f"[시트] 체크박스 유효성 적용 완료")
+            print(f"[시트] 행 삽입 + 체크박스 유효성 적용 완료 (행 {new_row_idx})")
         except Exception as e:
-            print(f"[시트] 체크박스 유효성 적용 실패: {e}")
+            print(f"[시트] 행 삽입 실패: {e}")
             raise
 
-        # A열: 오늘 날짜, B열: 보스명, C~AR열: 체크박스 False
+        # A열: 오늘 날짜, B열: 보스명 (C~AR은 체크박스 기본값 미체크)
         try:
             sheet.update([[datetime.now().strftime("%m/%d")]], f"A{new_row_idx}", value_input_option="USER_ENTERED")
             sheet.update([[boss_name]], f"B{new_row_idx}", value_input_option="USER_ENTERED")
-            sheet.update([[False] * 42], f"C{new_row_idx}:AR{new_row_idx}", value_input_option="RAW")
             print(f"[시트] 값 입력 완료")
         except Exception as e:
             print(f"[시트] 값 입력 실패: {e}")
