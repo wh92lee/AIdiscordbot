@@ -184,16 +184,17 @@ def record_cut_to_sheet(boss_name):
                     }
                 }}
             ]})
-            print(f"[시트] 행 삽입 + 유효성 적용 완료 (행 {new_row_idx})")
+            print(f"[시트] 행 삽입 완료 (행 {new_row_idx})")
+            print(f"[시트] 서식 복사 완료 (테두리, 글자 서식, 드롭박스, 체크박스)")
         except Exception as e:
-            print(f"[시트] 행 삽입 실패: {e}")
+            print(f"[시트] 행 삽입/서식 복사 실패: {e}")
             raise
 
         # A열: 오늘 날짜, B열: 보스명 (C~AR은 체크박스 기본값 미체크)
         try:
             sheet.update([[datetime.now().strftime("%m/%d")]], f"A{new_row_idx}", value_input_option="USER_ENTERED")
             sheet.update([[boss_name]], f"B{new_row_idx}", value_input_option="USER_ENTERED")
-            print(f"[시트] 값 입력 완료")
+            print(f"[시트] 값 입력 완료 (날짜: {datetime.now().strftime('%m/%d')}, 보스: {boss_name})")
         except Exception as e:
             print(f"[시트] 값 입력 실패: {e}")
             raise
