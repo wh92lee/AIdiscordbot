@@ -93,8 +93,8 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 KAKAO_SERVER_URL = get_setting("kakao", "server_url", default="")
 KAKAO_TOKEN      = get_setting("kakao", "token", default="bsbot-kakao-token")
 
-SPREADSHEET_NAME = "보탐봇테스트"
-SHEET_NAME = "참여율체크"
+SPREADSHEET_NAME = get_setting("sheet", "spreadsheet_name", default="보탐봇테스트")
+SHEET_NAME       = get_setting("sheet", "sheet_name", default="참여율체크")
 CREDENTIALS_FILE = "bsbot-428416-2282f2d345ef.json"
 
 
