@@ -210,6 +210,8 @@ def fetch_my_score(nickname):
 
         header_row = all_values[0]  # 1행 (0-based: index 0)
 
+        rate_row = all_values[1] if len(all_values) > 1 else []  # 2행: 참여율
+
         # C열(index 2) ~ AR열(index 43)에서 닉네임 매칭
         user_col = None
         for i in range(2, min(44, len(header_row))):
@@ -220,6 +222,9 @@ def fetch_my_score(nickname):
         if user_col is None:
             return None, f"'{nickname}' 을(를) 시트 1행에서 찾을 수 없습니다."
 
+        # 2행에서 해당 유저 참여율 가져오기
+        user_rate = rate_row[user_col].strip() if user_col < len(rate_row) else ""
+
         # 오늘 날짜 행 필터링
         today_rows = []
         for row in all_values[1:]:
@@ -229,9 +234,9 @@ def fetch_my_score(nickname):
             participated = row[user_col].strip().upper() == "TRUE" if len(row) > user_col else False
             today_rows.append((boss_name, participated))
 
-        return today_rows, None
+        return today_rows, user_rate, None
     except Exception as e:
-        return None, str(e)
+        return None, "", str(e)
 
 
 def record_cut_to_sheet(boss_name, score=1):
@@ -1184,7 +1189,7 @@ async def reset_all(ctx):
 async def my_score(ctx):
     nickname = extract_nickname(ctx.author.display_name)
     loop = asyncio.get_event_loop()
-    today_rows, error = await loop.run_in_executor(None, fetch_my_score, nickname)
+    today_rows, user_rate, error = await loop.run_in_executor(None, fetch_my_score, nickname)
 
     if error:
         await ctx.send(f"❌ {error}")
@@ -1205,12 +1210,14 @@ async def my_score(ctx):
         else:
             lines.append(f"❌ {boss_name}  미참")
 
+    author_text = f"{nickname}  (총 참여율: {user_rate})" if user_rate else nickname
+
     embed = discord.Embed(
         title="📊 금일 참여현황",
         description="\n".join(lines),
         color=discord.Color.blurple()
     )
-    embed.set_author(name=nickname)
+    embed.set_author(name=author_text)
     embed.set_footer(text=f"{today}  |  총 {len(today_rows)}보스 중 {participated_count}개 참여")
     await ctx.send(embed=embed)
 
