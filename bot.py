@@ -860,10 +860,21 @@ async def status(ctx):
         lines.append("")
 
     if normal:
+        shown_dates = set()
+        today = datetime.now().date()
         for i, boss_name in normal:
             info = boss_info[boss_name]
             target_dt = info["respawn_at"]
             label = info["label"]
+
+            # 날짜가 바뀌는 시점에 날짜 구분선 추가
+            boss_date = target_dt.date()
+            if boss_date != today and boss_date not in shown_dates:
+                lines.append("")
+                lines.append(f"─────────── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───────────")
+                lines.append("")
+                shown_dates.add(boss_date)
+
             lines.append(
                 f"`{i}.` **{boss_name}**  ⏱ {format_remaining(target_dt)}  |  🕐 {target_dt.strftime('%H:%M')}  |  {label}"
             )
