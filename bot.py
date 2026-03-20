@@ -110,25 +110,43 @@ def get_sheet():
 def record_cut_to_sheet(boss_name):
     try:
         sheet = get_sheet()
-        all_values = sheet.get_all_values()
+        last_row_idx = len(sheet.get_all_values())  # 마지막 데이터 행 번호 (1-based)
+        new_row_idx = last_row_idx + 1
 
-        # 마지막 행 복사 (AR열까지 = 44칸 확보)
-        last_row = all_values[-1] if all_values else []
-        new_row = last_row.copy()
-        while len(new_row) < 44:
-            new_row.append("")
+        # 마지막 행을 아래 행으로 서식 포함 복사 (copyPaste)
+        sheet.spreadsheet.batch_update({
+            "requests": [{
+                "copyPaste": {
+                    "source": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx - 1,
+                        "endRowIndex": last_row_idx,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 44
+                    },
+                    "destination": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": new_row_idx - 1,
+                        "endRowIndex": new_row_idx,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 44
+                    },
+                    "pasteType": "PASTE_NORMAL"
+                }
+            }]
+        })
 
-        # A열: 오늘 날짜 (MM/DD 형식)
-        new_row[0] = datetime.now().strftime("%m/%d")
+        # A열: 오늘 날짜, B열: 보스명, C~AR열: 체크박스 False
+        updates = [
+            {"range": f"A{new_row_idx}", "values": [[datetime.now().strftime("%m/%d")]]},
+            {"range": f"B{new_row_idx}", "values": [[boss_name]]},
+            {"range": f"C{new_row_idx}:AR{new_row_idx}", "values": [[False] * 42]},
+        ]
+        sheet.spreadsheet.values_batch_update({
+            "valueInputOption": "USER_ENTERED",
+            "data": updates
+        })
 
-        # B열: 드롭박스 보스명
-        new_row[1] = boss_name
-
-        # C열(index 2) ~ AR열(index 43): 체크박스 False로 초기화
-        for i in range(2, 44):
-            new_row[i] = False
-
-        sheet.append_row(new_row, value_input_option="USER_ENTERED")
         return True
     except Exception as e:
         print(f"[시트 기록 오류] {e}")
