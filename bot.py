@@ -137,6 +137,21 @@ def extract_nickname(display_name):
     return parts[-1].strip()
 
 
+def is_today(cell_value):
+    """시트 날짜 셀이 오늘인지 확인 (3/20, 03/20, 3/20/2026 등 다양한 형식 대응)"""
+    now = datetime.now()
+    cell = cell_value.strip()
+    parts = cell.split("/")
+    if len(parts) < 2:
+        return False
+    try:
+        month = int(parts[0])
+        day = int(parts[1])
+        return month == now.month and day == now.day
+    except ValueError:
+        return False
+
+
 def fetch_my_score(nickname):
     """시트에서 오늘 날짜 기준 해당 유저의 참여 현황 조회
     반환: ([(보스명, participated), ...], error_msg)
@@ -149,7 +164,6 @@ def fetch_my_score(nickname):
             return None, "시트가 비어있습니다."
 
         header_row = all_values[0]  # 1행 (0-based: index 0)
-        today = datetime.now().strftime("%m/%d")
 
         # C열(index 2) ~ AR열(index 43)에서 닉네임 매칭
         user_col = None
@@ -164,7 +178,7 @@ def fetch_my_score(nickname):
         # 오늘 날짜 행 필터링
         today_rows = []
         for row in all_values[1:]:
-            if not row or row[0].strip() != today:
+            if not row or not is_today(row[0]):
                 continue
             boss_name = row[1].strip() if len(row) > 1 else "?"
             participated = row[user_col].strip().upper() == "TRUE" if len(row) > user_col else False
