@@ -495,6 +495,17 @@ def format_remaining(target_dt):
 
 
 def parse_time(time_str, must_be_future=False):
+    import re
+    # 지속시간 형식: "2일 7시간", "18시간 30분", "30분" 등
+    s = time_str.replace(" ", "")
+    m = re.fullmatch(r'(?:(\d+)일)?(?:(\d+)시간)?(?:(\d+)분)?', s)
+    if m and any(m.groups()):
+        days    = int(m.group(1) or 0)
+        hours   = int(m.group(2) or 0)
+        minutes = int(m.group(3) or 0)
+        if days or hours or minutes:
+            return datetime.now() + timedelta(days=days, hours=hours, minutes=minutes)
+
     if len(time_str) == 4 and time_str.isdigit():
         time_str = time_str[:2] + ":" + time_str[2:]
     now = datetime.now()
@@ -518,6 +529,9 @@ class CutButton(discord.ui.View):
         self.channel = channel
         self.processing = False
 
+    # 축보스 → 일반보스 매핑 (컷 시 일반보스로 등록, 리젠 -24시간)
+    CHUK_BOSS_MAP = {"축티르": "티르", "축토르": "토르", "축오딘": "오딘"}
+
     @discord.ui.button(label="⚔️ 컷!", style=discord.ButtonStyle.danger)
     async def cut(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.processing:
@@ -528,7 +542,12 @@ class CutButton(discord.ui.View):
         now = datetime.now()
         score = get_boss_score(self.boss_name)
 
-        if self.respawn_minutes > 0:
+        # 축보스 컷 처리: 일반보스로 (리젠 - 24시간) 등록
+        if self.boss_name in self.CHUK_BOSS_MAP:
+            normal_boss = self.CHUK_BOSS_MAP[self.boss_name]
+            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes - 1440)
+            register_alert(self.channel, normal_boss, next_respawn_dt, "처치 기반")
+        elif self.respawn_minutes > 0:
             next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
             register_alert(self.channel, self.boss_name, next_respawn_dt, "처치 기반")
         elif score > 0:
@@ -540,16 +559,28 @@ class CutButton(discord.ui.View):
         button.label = f"✅ {interaction.user.display_name} 컷"
         await interaction.response.edit_message(view=self)
 
-        embed = discord.Embed(
-            title="💀 컷 처리 완료",
-            description=f"**{self.boss_name}** 처치 완료!",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="처치 시각", value=now.strftime("%H:%M"), inline=True)
-        if self.respawn_minutes > 0:
-            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
+        if self.boss_name in self.CHUK_BOSS_MAP:
+            normal_boss = self.CHUK_BOSS_MAP[self.boss_name]
+            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes - 1440)
+            embed = discord.Embed(
+                title="💀 컷 처리 완료",
+                description=f"**{self.boss_name}** 처치 완료! → **{normal_boss}** 으로 등록",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="처치 시각", value=now.strftime("%H:%M"), inline=True)
             embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
-            embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
+            embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes - 1440), inline=True)
+        else:
+            embed = discord.Embed(
+                title="💀 컷 처리 완료",
+                description=f"**{self.boss_name}** 처치 완료!",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="처치 시각", value=now.strftime("%H:%M"), inline=True)
+            if self.respawn_minutes > 0:
+                next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
+                embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
+                embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
         await self.channel.send(embed=embed)
 
 
@@ -817,12 +848,13 @@ async def on_message(message):
         await status(ctx)
         return
 
-    # !보스명 시간 형식 처리 (예: !니드호그 15:30)
+    # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
     content = message.content.strip()
     if content.startswith(PREFIX):
         parts = content[len(PREFIX):].split()
-        if len(parts) == 2:
-            boss_input, time_input = parts
+        if len(parts) >= 2:
+            boss_input = parts[0]
+            time_input = " ".join(parts[1:])
             bosses = load_bosses()
             matched = find_boss(boss_input, bosses)
             if matched:
@@ -957,7 +989,8 @@ async def kill_boss(ctx, boss_name: str, kill_time_str: str = None):
 
 
 @bot.command(name="젠")
-async def set_respawn(ctx, boss_name: str, respawn_time_str: str):
+async def set_respawn(ctx, boss_name: str, *time_parts: str):
+    respawn_time_str = " ".join(time_parts)
     bosses = load_bosses()
     matched = find_boss(boss_name, bosses)
 
@@ -1268,7 +1301,9 @@ async def show_commands(ctx):
             "`!킬 보스명` — 현재 시각 기준 처치 등록\n"
             "`!킬 보스명 14:30` — 처치 시각 지정 등록\n"
             "`!젠 보스명 15:30` — 리젠 시각 직접 지정\n"
-            "`!보스명 15:30` — 리젠 시각 직접 지정 (단축)"
+            "`!보스명 15:30` — 리젠 시각 직접 지정 (단축)\n"
+            "`!보스명 2일 7시간` — 남은 시간으로 리젠 등록\n"
+            "`!보스명 19시간 30분` — 남은 시간으로 리젠 등록"
         ),
         inline=False
     )
