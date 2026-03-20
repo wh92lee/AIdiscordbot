@@ -139,10 +139,19 @@ def extract_nickname(display_name):
 
 def is_today(cell_value):
     """시트 날짜 셀이 오늘인지 확인
-    지원 형식: 3/20, 03/20, 3/20/2026, 2026. 3. 20 등
+    지원 형식: 3월20일, 3/20, 03/20, 3/20/2026, 2026. 3. 20 등
     """
+    import re
     now = datetime.now()
     cell = cell_value.strip()
+
+    # "3월20일", "3월 20일" 형식
+    m = re.match(r'^(\d+)월\s*(\d+)일$', cell)
+    if m:
+        try:
+            return int(m.group(1)) == now.month and int(m.group(2)) == now.day
+        except ValueError:
+            pass
 
     # "2026. 3. 20" 형식 (점+공백 구분)
     if ". " in cell:
@@ -790,7 +799,7 @@ async def on_message(message):
         await show_commands(ctx)
         return
 
-    if message.content.strip() in ("내점수", "!내점수"):
+    if message.content.strip() in ("참여", "!내참여"):
         ctx = await bot.get_context(message)
         await my_score(ctx)
         return
@@ -1185,7 +1194,7 @@ async def reset_all(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command(name="내점수")
+@bot.command(name="내참여")
 async def my_score(ctx):
     nickname = extract_nickname(ctx.author.display_name)
     loop = asyncio.get_event_loop()
@@ -1268,7 +1277,7 @@ async def show_commands(ctx):
         value=(
             "`보스` 또는 `ㅄ` — 현재 대기 중인 보스 현황\n"
             "`!보스목록` — 전체 보스 및 리젠 시간 목록\n"
-            "`내점수` 또는 `!내점수` — 금일 참여현황 조회\n"
+            "`참여` 또는 `!내참여` — 금일 참여현황 조회\n"
             "`점수` 또는 `!점수` — 현재까지 참여율 순위"
         ),
         inline=False
