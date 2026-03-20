@@ -206,6 +206,22 @@ def record_cut_to_sheet(boss_name):
                         "condition": {"type": "BOOLEAN"},
                         "strict": True
                     }
+                }},
+                # 전체 행(A~AR) 전체 테두리 적용
+                {"updateBorders": {
+                    "range": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": last_row_idx,
+                        "endRowIndex": last_row_idx + 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 44
+                    },
+                    "top":    {"style": "SOLID", "width": 1},
+                    "bottom": {"style": "SOLID", "width": 1},
+                    "left":   {"style": "SOLID", "width": 1},
+                    "right":  {"style": "SOLID", "width": 1},
+                    "innerHorizontal": {"style": "SOLID", "width": 1},
+                    "innerVertical":   {"style": "SOLID", "width": 1}
                 }}
             ]})
             print(f"[시트] 행 삽입 완료 (행 {new_row_idx})")
