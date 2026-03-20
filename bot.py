@@ -113,9 +113,10 @@ def record_cut_to_sheet(boss_name):
         last_row_idx = len(sheet.get_all_values())  # 마지막 데이터 행 번호 (1-based)
         new_row_idx = last_row_idx + 1
 
-        # 마지막 행 아래에 새 행 삽입 (윗 행 서식/드롭박스/체크박스 상속)
-        sheet.spreadsheet.batch_update({"requests": [{
-            "insertDimension": {
+        # 새 행 삽입 + 체크박스/드롭박스 데이터 유효성 명시 적용
+        sheet.spreadsheet.batch_update({"requests": [
+            # 새 행 삽입
+            {"insertDimension": {
                 "range": {
                     "sheetId": sheet.id,
                     "dimension": "ROWS",
@@ -123,13 +124,27 @@ def record_cut_to_sheet(boss_name):
                     "endIndex": last_row_idx + 1
                 },
                 "inheritFromBefore": True
-            }
-        }]})
+            }},
+            # C~AR열 체크박스 데이터 유효성 명시 적용
+            {"setDataValidation": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": last_row_idx,
+                    "endRowIndex": last_row_idx + 1,
+                    "startColumnIndex": 2,
+                    "endColumnIndex": 44
+                },
+                "rule": {
+                    "condition": {"type": "BOOLEAN"},
+                    "strict": True
+                }
+            }}
+        ]})
 
         # A열: 오늘 날짜, B열: 보스명, C~AR열: 체크박스 False
         sheet.update([[datetime.now().strftime("%m/%d")]], f"A{new_row_idx}", value_input_option="USER_ENTERED")
         sheet.update([[boss_name]], f"B{new_row_idx}", value_input_option="USER_ENTERED")
-        sheet.update([[False] * 42], f"C{new_row_idx}:AR{new_row_idx}", value_input_option="USER_ENTERED")
+        sheet.update([[False] * 42], f"C{new_row_idx}:AR{new_row_idx}", value_input_option="RAW")
 
         return True
     except Exception as e:
