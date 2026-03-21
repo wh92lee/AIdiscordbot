@@ -657,6 +657,8 @@ class CutButton(discord.ui.View):
         self.pending = set()        # 배치 대기 중인 닉네임
         self._batch_task = None
         self.cut_date = datetime.now().date()  # 보스 젠 날짜 저장
+        # 참여 버튼 초기 비활성화 (컷 버튼 누른 후 활성화)
+        self.participate.disabled = True
 
     # 축보스 → 일반보스 매핑 (컷 시 일반보스로 등록, 리젠 -24시간)
     CHUK_BOSS_MAP = {"축티르": "티르", "축토르": "토르", "축오딘": "오딘"}
@@ -682,6 +684,8 @@ class CutButton(discord.ui.View):
 
         button.disabled = True
         button.label = f"✅ {interaction.user.display_name} 컷"
+        if self.score > 0:
+            self.participate.disabled = False
         await interaction.response.edit_message(view=self)
 
         if self.boss_name in self.CHUK_BOSS_MAP:
