@@ -92,6 +92,8 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 KAKAO_SERVER_URL = get_setting("kakao", "server_url", default="")
 KAKAO_TOKEN      = get_setting("kakao", "token", default="bsbot-kakao-token")
+KAKAO_UPDATE_PORT = 22409
+KAKAO_UPDATE_TOKEN = KAKAO_TOKEN
 
 SPREADSHEET_NAME = get_setting("sheet", "spreadsheet_name", default="보탐봇테스트")
 SHEET_NAME       = get_setting("sheet", "sheet_name", default="참여율체크")
@@ -100,14 +102,15 @@ CREDENTIALS_FILE = "bsbot-428416-2282f2d345ef.json"
 
 async def send_kakao_alert(boss_name, alert_type):
     """카카오톡 로컬 서버로 알림 전송 (server_url 미설정 시 스킵)"""
-    if not KAKAO_SERVER_URL:
+    url = get_setting("kakao", "server_url", default="")
+    if not url:
         return
     try:
         import urllib.request
         import json as _json
         body = _json.dumps({"boss": boss_name, "type": alert_type}).encode()
         req = urllib.request.Request(
-            f"{KAKAO_SERVER_URL}/alert",
+            f"{url}/alert",
             data=body,
             headers={"Content-Type": "application/json", "X-Token": KAKAO_TOKEN},
             method="POST"
@@ -117,6 +120,43 @@ async def send_kakao_alert(boss_name, alert_type):
         print(f"[카카오] {alert_type} 알림 전송: {boss_name}")
     except Exception as e:
         print(f"[카카오] 전송 실패: {e}")
+
+
+async def kakao_url_update_server():
+    """Windows .bat에서 ngrok 새 주소를 받아 settings.json 자동 업데이트"""
+    import json as _json
+    from asyncio import StreamReader, StreamWriter
+
+    async def handle(reader: StreamReader, writer: StreamWriter):
+        try:
+            data = await reader.read(4096)
+            text = data.decode()
+            # HTTP 요청에서 body 추출
+            if "\r\n\r\n" in text:
+                body = text.split("\r\n\r\n", 1)[1]
+            else:
+                body = text
+            payload = _json.loads(body)
+            token = payload.get("token", "")
+            new_url = payload.get("url", "")
+            if token != KAKAO_UPDATE_TOKEN:
+                writer.write(b"HTTP/1.1 401 Unauthorized\r\n\r\n")
+            elif new_url:
+                set_setting(new_url, "kakao", "server_url")
+                print(f"[카카오] ngrok 주소 자동 업데이트: {new_url}")
+                writer.write(b"HTTP/1.1 200 OK\r\n\r\nok")
+            else:
+                writer.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+        except Exception as e:
+            print(f"[카카오] URL 업데이트 오류: {e}")
+            writer.write(b"HTTP/1.1 500 Internal Server Error\r\n\r\n")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "0.0.0.0", KAKAO_UPDATE_PORT)
+    print(f"[카카오] URL 업데이트 서버 시작 (포트 {KAKAO_UPDATE_PORT})")
+    async with server:
+        await server.serve_forever()
 
 
 _sheet_cache = None
@@ -1543,4 +1583,8 @@ async def show_commands(ctx):
     await ctx.send(embed=embed)
 
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+async def main():
+    asyncio.create_task(kakao_url_update_server())
+    await bot.start(os.getenv("DISCORD_TOKEN"))
+
+asyncio.run(main())
