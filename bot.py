@@ -850,12 +850,17 @@ def register_alert(channel, boss_name, target_dt, label):
     if boss_name in pending_tasks:
         pending_tasks[boss_name].cancel()
 
+    # alert_channel_id 설정 시 해당 채널로 고정, 없으면 입력 채널 사용
+    alert_ch_id = get_setting("discord", "alert_channel_id")
+    alert_channel = bot.get_channel(alert_ch_id) if alert_ch_id else None
+    notify_channel = alert_channel or channel
+
     boss_info[boss_name] = {"respawn_at": target_dt, "label": label}
-    task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label))
+    task = asyncio.create_task(schedule_notify(notify_channel, boss_name, target_dt, label))
     pending_tasks[boss_name] = task
 
-    save_respawn_entry(boss_name, target_dt, label, channel.id)
-    recalculate_group_warnings(channel)
+    save_respawn_entry(boss_name, target_dt, label, notify_channel.id)
+    recalculate_group_warnings(notify_channel)
 
 
 # ────────── 이벤트 ──────────
