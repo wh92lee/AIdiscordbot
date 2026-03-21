@@ -9,5 +9,3 @@ timeout /t 5 >nul
 powershell -NoProfile -ExecutionPolicy Bypass -File "C:\kakaobot\update_kakao_url.ps1"
 
 start /B "" python "C:\kakaobot\kakao_server.py"
-echo done
-pause
