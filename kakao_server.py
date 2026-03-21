@@ -67,6 +67,15 @@ def send_message(message):
             if not find_and_open_room():
                 return False
 
+            # 입력창 클릭으로 포커스 확보 (창 하단 중앙)
+            rooms = [w for w in gw.getAllWindows() if ROOM_NAME in w.title]
+            if rooms:
+                win = rooms[0]
+                x = win.left + win.width // 2
+                y = win.top + win.height - 50
+                pyautogui.click(x, y)
+                time.sleep(0.3)
+
             # 한글 포함 메시지는 클립보드 통해 붙여넣기
             pyperclip.copy(message)
             pyautogui.hotkey("ctrl", "v")
