@@ -1126,9 +1126,15 @@ async def on_message(message):
                 key=lambda name: boss_info[name]["respawn_at"]
             )
             kakao_lines = []
-            for boss_name in sorted_bosses:
+            shown_dates = set()
+            today = datetime.now().date()
+            for i, boss_name in enumerate(sorted_bosses, start=1):
                 target_dt = boss_info[boss_name]["respawn_at"]
-                kakao_lines.append(f"{boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
+                boss_date = target_dt.date()
+                if boss_date != today and boss_date not in shown_dates:
+                    kakao_lines.append(f"─── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───")
+                    shown_dates.add(boss_date)
+                kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
             kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
             await send_kakao_message(kakao_text)
         return
