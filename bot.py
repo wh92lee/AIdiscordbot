@@ -1119,11 +1119,17 @@ async def on_message(message):
         ctx = await bot.get_context(message)
         await status(ctx)
         # 운영진이 조회 시 카카오톡으로도 현황 전송
-        lines = _build_status_lines()
-        if lines:
-            import re
-            plain = re.sub(r"\*\*|`", "", "\n".join(lines))
-            kakao_text = f"[ 츄츄봇 - 보스현황 ]\n{plain}"
+        active = {k: v for k, v in pending_tasks.items() if not v.done()}
+        if active:
+            sorted_bosses = sorted(
+                [name for name in active if name in boss_info],
+                key=lambda name: boss_info[name]["respawn_at"]
+            )
+            kakao_lines = []
+            for boss_name in sorted_bosses:
+                target_dt = boss_info[boss_name]["respawn_at"]
+                kakao_lines.append(f"{boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
+            kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
             await send_kakao_message(kakao_text)
         return
 
