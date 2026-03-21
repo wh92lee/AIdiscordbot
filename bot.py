@@ -737,7 +737,7 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     bosses = load_bosses()
     respawn_minutes = bosses.get(boss_name, 0)
     chapter = get_boss_chapter(boss_name)
-    auto_renew = chapter in ("2", "3")
+    auto_renew = chapter in ("2", "3", "4")
 
     embed = discord.Embed(
         title="⚔️ 보스 리젠 알림!",
