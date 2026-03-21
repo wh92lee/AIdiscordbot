@@ -144,6 +144,52 @@ async def send_kakao_message(text):
         print(f"[카카오] 전송 실패: {e}")
 
 
+async def send_kakao_status():
+    """24시간 이내 보스현황을 카카오톡으로 전송"""
+    active = {k: v for k, v in pending_tasks.items() if not v.done()}
+    if not active:
+        return
+    sorted_bosses = sorted(
+        [name for name in active if name in boss_info],
+        key=lambda name: boss_info[name]["respawn_at"]
+    )
+    kakao_lines = []
+    shown_dates = set()
+    today = datetime.now().date()
+    now = datetime.now()
+    filtered = [(name, boss_info[name]["respawn_at"]) for name in sorted_bosses
+                if (boss_info[name]["respawn_at"] - now).total_seconds() <= 86400]
+    for i, (boss_name, target_dt) in enumerate(filtered, start=1):
+        boss_date = target_dt.date()
+        if boss_date == today and today not in shown_dates:
+            kakao_lines.append("─── 📅 오늘 보스 ───")
+            shown_dates.add(today)
+        elif boss_date != today and boss_date not in shown_dates:
+            kakao_lines.append(f"─── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───")
+            shown_dates.add(boss_date)
+        kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
+    if kakao_lines:
+        kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
+        await send_kakao_message(kakao_text)
+
+
+async def kakao_status_scheduler():
+    """매일 07:00, 19:00에 카카오톡으로 보스현황 자동 전송"""
+    import asyncio as _asyncio
+    target_hours = {7, 19}
+    sent_today = set()
+    while True:
+        now = datetime.now()
+        key = (now.date(), now.hour)
+        if now.hour in target_hours and key not in sent_today:
+            sent_today.add(key)
+            print(f"[카카오] 정기 현황 전송 ({now.hour}시)")
+            await send_kakao_status()
+        # 오래된 기록 정리 (오늘 날짜 아닌 것 제거)
+        sent_today = {k for k in sent_today if k[0] == now.date()}
+        await _asyncio.sleep(30)
+
+
 async def kakao_url_update_server():
     """Windows .bat에서 ngrok 새 주소를 받아 settings.json 자동 업데이트"""
     import json as _json
@@ -1119,31 +1165,7 @@ async def on_message(message):
         ctx = await bot.get_context(message)
         await status(ctx)
         # 운영진이 조회 시 카카오톡으로도 현황 전송
-        active = {k: v for k, v in pending_tasks.items() if not v.done()}
-        if active:
-            sorted_bosses = sorted(
-                [name for name in active if name in boss_info],
-                key=lambda name: boss_info[name]["respawn_at"]
-            )
-            kakao_lines = []
-            shown_dates = set()
-            today = datetime.now().date()
-            now = datetime.now()
-            # 24시간 이내 젠 보스만 필터링
-            filtered = [(name, boss_info[name]["respawn_at"]) for name in sorted_bosses
-                        if (boss_info[name]["respawn_at"] - now).total_seconds() <= 86400]
-            for i, (boss_name, target_dt) in enumerate(filtered, start=1):
-                boss_date = target_dt.date()
-                if boss_date == today and today not in shown_dates:
-                    kakao_lines.append("─── 📅 오늘 보스 ───")
-                    shown_dates.add(today)
-                elif boss_date != today and boss_date not in shown_dates:
-                    kakao_lines.append(f"─── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───")
-                    shown_dates.add(boss_date)
-                kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
-            if kakao_lines:
-                kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
-                await send_kakao_message(kakao_text)
+        await send_kakao_status()
         return
 
     # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
@@ -1653,6 +1675,7 @@ async def show_commands(ctx):
 
 async def main():
     asyncio.create_task(kakao_url_update_server())
+    asyncio.create_task(kakao_status_scheduler())
     await bot.start(os.getenv("DISCORD_TOKEN"))
 
 asyncio.run(main())
