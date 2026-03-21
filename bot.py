@@ -1128,15 +1128,22 @@ async def on_message(message):
             kakao_lines = []
             shown_dates = set()
             today = datetime.now().date()
-            for i, boss_name in enumerate(sorted_bosses, start=1):
-                target_dt = boss_info[boss_name]["respawn_at"]
+            now = datetime.now()
+            # 24시간 이내 젠 보스만 필터링
+            filtered = [(name, boss_info[name]["respawn_at"]) for name in sorted_bosses
+                        if (boss_info[name]["respawn_at"] - now).total_seconds() <= 86400]
+            for i, (boss_name, target_dt) in enumerate(filtered, start=1):
                 boss_date = target_dt.date()
-                if boss_date != today and boss_date not in shown_dates:
+                if boss_date == today and today not in shown_dates:
+                    kakao_lines.append("─── 📅 오늘 보스 ───")
+                    shown_dates.add(today)
+                elif boss_date != today and boss_date not in shown_dates:
                     kakao_lines.append(f"─── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───")
                     shown_dates.add(boss_date)
                 kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
-            kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
-            await send_kakao_message(kakao_text)
+            if kakao_lines:
+                kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
+                await send_kakao_message(kakao_text)
         return
 
     # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
