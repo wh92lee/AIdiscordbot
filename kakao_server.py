@@ -91,9 +91,9 @@ def alert():
     alert_type = data.get("type", "")  # "5min" or "spawn"
 
     if alert_type == "5min":
-        message = f"⚠️ [{boss}] 5분 후 리젠!"
+        message = f"[{boss}] 5분 전 입니다."
     elif alert_type == "spawn":
-        message = f"🔴 [{boss}] 리젠됐습니다!"
+        message = f"[{boss}] 젠 시간입니다."
     else:
         return jsonify({"ok": False, "error": "Invalid type"}), 400
 
