@@ -79,10 +79,8 @@ def send_message(message):
     """카카오톡 채팅방에 메시지 전송"""
     with send_lock:
         try:
-            print(f"[카카오] 창 찾는 중...")
             if not find_and_open_room():
                 return False
-            print(f"[카카오] 창 찾음, 클릭 시도...")
 
             rooms = find_hwnd(ROOM_NAME)
             if rooms:
@@ -91,24 +89,22 @@ def send_message(message):
                 ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
                 x = (rect.left + rect.right) // 2
                 y = rect.bottom - 50
-                print(f"[카카오] 클릭 좌표: {x}, {y}")
                 try:
                     pyautogui.click(x, y)
-                except Exception as e:
-                    print(f"[카카오] 클릭 실패 (무시): {e}")
+                except Exception:
+                    pass
                 time.sleep(0.3)
 
-            print(f"[카카오] 붙여넣기 시도...")
             pyperclip.copy(message)
             try:
                 pyautogui.hotkey("ctrl", "v")
-            except Exception as e:
-                print(f"[카카오] hotkey 실패 (무시): {e}")
+            except Exception:
+                pass
             time.sleep(0.2)
             try:
                 pyautogui.press("enter")
-            except Exception as e:
-                print(f"[카카오] enter 실패 (무시): {e}")
+            except Exception:
+                pass
             print(f"[카카오] 전송 완료: {message}")
             return True
         except Exception as e:
