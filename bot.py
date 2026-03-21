@@ -1421,39 +1421,48 @@ async def reset_all(ctx):
 
 @bot.command(name="내참여")
 async def my_score(ctx):
+    # 명령어 메시지 삭제
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
     nickname = extract_nickname(ctx.author.display_name)
     loop = asyncio.get_event_loop()
     today_rows, user_rate, error = await loop.run_in_executor(None, fetch_my_score, nickname)
 
-    if error:
-        await ctx.send(f"❌ {error}")
-        return
-
     today = datetime.now().strftime("%m/%d")
 
-    if not today_rows:
-        await ctx.send(f"📋 오늘({today}) 기록된 보스가 없습니다.")
-        return
+    if error:
+        embed = discord.Embed(description=f"❌ {error}", color=discord.Color.red())
+    elif not today_rows:
+        embed = discord.Embed(description=f"📋 오늘({today}) 기록된 보스가 없습니다.", color=discord.Color.greyple())
+    else:
+        lines = []
+        participated_count = 0
+        for boss_name, participated in today_rows:
+            if participated:
+                lines.append(f"✅ {boss_name}  참여")
+                participated_count += 1
+            else:
+                lines.append(f"❌ {boss_name}  미참")
 
-    lines = []
-    participated_count = 0
-    for boss_name, participated in today_rows:
-        if participated:
-            lines.append(f"✅ {boss_name}  참여")
-            participated_count += 1
-        else:
-            lines.append(f"❌ {boss_name}  미참")
+        author_text = f"{nickname}  (총 참여율: {user_rate})" if user_rate else nickname
+        embed = discord.Embed(
+            title="📊 금일 참여현황",
+            description="\n".join(lines),
+            color=discord.Color.blurple()
+        )
+        embed.set_author(name=author_text)
+        embed.set_footer(text=f"{today}  |  총 {len(today_rows)}보스 중 {participated_count}개 참여")
 
-    author_text = f"{nickname}  (총 참여율: {user_rate})" if user_rate else nickname
-
-    embed = discord.Embed(
-        title="📊 금일 참여현황",
-        description="\n".join(lines),
-        color=discord.Color.blurple()
-    )
-    embed.set_author(name=author_text)
-    embed.set_footer(text=f"{today}  |  총 {len(today_rows)}보스 중 {participated_count}개 참여")
-    await ctx.send(embed=embed)
+    # 응답 전송 후 30초 뒤 자동 삭제
+    msg = await ctx.send(embed=embed)
+    await asyncio.sleep(30)
+    try:
+        await msg.delete()
+    except Exception:
+        pass
 
 
 @bot.command(name="점수")
