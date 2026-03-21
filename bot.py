@@ -120,6 +120,7 @@ async def send_kakao_alert(boss_name, alert_type):
 
 
 _sheet_cache = None
+_sheet_write_lock = asyncio.Lock()  # 동시 시트 쓰기 방지 (동시 젠 시 직렬화)
 
 def _connect_sheet():
     creds = Credentials.from_service_account_file(
@@ -879,10 +880,12 @@ async def schedule_notify(channel, boss_name, target_dt, label):
 
     score = get_boss_score(boss_name)
     # 젠 알림 시 시트 기록 (score > 0인 보스만) — kill_sequence 먼저 확보
+    # _sheet_write_lock으로 직렬화: 동시 젠 시 한 번에 하나씩 처리해 충돌 방지
     kill_sequence = 1
     if score > 0:
         loop = asyncio.get_event_loop()
-        sheet_ok, kill_sequence = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
+        async with _sheet_write_lock:
+            sheet_ok, kill_sequence = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
         sheet_embed = discord.Embed(
             description="✅ 시트 기록 완료" if sheet_ok else "⚠️ 시트 기록 실패",
             color=discord.Color.green() if sheet_ok else discord.Color.red()
