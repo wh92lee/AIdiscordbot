@@ -14,10 +14,11 @@ ngrok http 5000
 
 from flask import Flask, request, jsonify
 import pyautogui
-import pygetwindow as gw
 import pyperclip
 import threading
 import time
+import ctypes
+import ctypes.wintypes
 
 app = Flask(__name__)
 
@@ -27,29 +28,43 @@ SECRET_TOKEN = "bsbot-kakao-token"   # 리눅스 봇과 동일하게 설정
 send_lock = threading.Lock()
 
 
-def find_and_open_room():
-    """채팅방 창 찾기 (열려있으면 활성화, 없으면 메인창에서 검색)"""
-    # 채팅방이 이미 열려있는 경우
-    rooms = [w for w in gw.getAllWindows() if ROOM_NAME in w.title]
-    if rooms:
-        win = rooms[0]
-        win.restore()
-        win.activate()
-        time.sleep(0.5)
+def find_hwnd(title_keyword):
+    """윈도우 핸들(hwnd) 찾기"""
+    import ctypes
+    result = []
+    def callback(hwnd, _):
+        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+        if length > 0:
+            buf = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+            if title_keyword in buf.value:
+                result.append((hwnd, buf.value))
         return True
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+    ctypes.windll.user32.EnumWindows(WNDENUMPROC(callback), 0)
+    return result
 
-    # 카카오톡 메인 창에서 검색
-    kakao_wins = [w for w in gw.getAllWindows() if w.title == "카카오톡"]
-    if not kakao_wins:
-        print("[카카오] 카카오톡 창을 찾을 수 없습니다. 카카오톡이 실행 중인지 확인하세요.")
-        return False
 
-    win = kakao_wins[0]
-    win.restore()
-    win.activate()
+def activate_hwnd(hwnd):
+    """창 활성화"""
+    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    ctypes.windll.user32.SetForegroundWindow(hwnd)
     time.sleep(0.5)
 
-    # Ctrl+F로 채팅방 검색
+
+def find_and_open_room():
+    """채팅방 창 찾기 (열려있으면 활성화, 없으면 메인창에서 검색)"""
+    rooms = find_hwnd(ROOM_NAME)
+    if rooms:
+        activate_hwnd(rooms[0][0])
+        return True
+
+    kakao_wins = find_hwnd("카카오톡")
+    if not kakao_wins:
+        print("[카카오] 카카오톡 창을 찾을 수 없습니다.")
+        return False
+
+    activate_hwnd(kakao_wins[0][0])
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.4)
     pyperclip.copy(ROOM_NAME)
@@ -67,16 +82,17 @@ def send_message(message):
             if not find_and_open_room():
                 return False
 
-            # 입력창 클릭으로 포커스 확보 (창 하단 중앙)
-            rooms = [w for w in gw.getAllWindows() if ROOM_NAME in w.title]
+            # 채팅방 창 위치로 입력창 클릭
+            rooms = find_hwnd(ROOM_NAME)
             if rooms:
-                win = rooms[0]
-                x = win.left + win.width // 2
-                y = win.top + win.height - 50
+                hwnd = rooms[0][0]
+                rect = ctypes.wintypes.RECT()
+                ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                x = (rect.left + rect.right) // 2
+                y = rect.bottom - 50
                 pyautogui.click(x, y)
                 time.sleep(0.3)
 
-            # 한글 포함 메시지는 클립보드 통해 붙여넣기
             pyperclip.copy(message)
             pyautogui.hotkey("ctrl", "v")
             time.sleep(0.2)
@@ -107,7 +123,7 @@ def alert():
         return jsonify({"ok": False, "error": "Invalid type"}), 400
 
     # 별도 스레드에서 전송 (응답 즉시 반환)
-    threading.Thread(target=send_message, args=(message,), daemon=True).start()
+    threading.Thread(target=send_message, args=(message,), daemon=False).start()
     return jsonify({"ok": True})
 
 
