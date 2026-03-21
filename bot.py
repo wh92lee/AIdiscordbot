@@ -562,15 +562,69 @@ def parse_time(time_str, must_be_future=False):
     return dt
 
 
+def update_participation_batch(boss_name, nicknames):
+    """여러 닉네임을 한 번의 API 호출로 업데이트"""
+    try:
+        sheet = get_sheet()
+        try:
+            all_values = sheet.get_all_values()
+        except Exception:
+            reset_sheet_cache()
+            sheet = get_sheet()
+            all_values = sheet.get_all_values()
+
+        if not all_values:
+            return False, "시트가 비어있습니다."
+
+        header_row = all_values[0]
+
+        # 각 닉네임의 열 찾기
+        user_cols = {}
+        for nickname in nicknames:
+            for i in range(2, min(44, len(header_row))):
+                if header_row[i].strip() == nickname:
+                    user_cols[nickname] = i
+                    break
+
+        # 오늘 날짜 + 보스명 행 찾기 (1-based)
+        target_rows = []
+        for i, row in enumerate(all_values[1:], start=2):
+            if row and is_today(row[0]) and len(row) > 1 and row[1].strip() == boss_name:
+                target_rows.append(i)
+
+        if not target_rows:
+            return False, f"오늘 '{boss_name}' 기록을 찾을 수 없습니다."
+
+        # 모든 참여자 셀을 한 번에 업데이트
+        updates = [
+            {"range": gspread.utils.rowcol_to_a1(row_num, user_col + 1), "values": [[True]]}
+            for nickname, user_col in user_cols.items()
+            for row_num in target_rows
+        ]
+        if updates:
+            sheet.batch_update(updates, value_input_option="USER_ENTERED")
+
+        not_found = [n for n in nicknames if n not in user_cols]
+        return True, not_found
+    except Exception as e:
+        reset_sheet_cache()
+        return False, str(e)
+
+
 # ────────── UI: 컷 버튼 ──────────
 
 class CutButton(discord.ui.View):
-    def __init__(self, boss_name, respawn_minutes, channel):
+    def __init__(self, boss_name, respawn_minutes, channel, score=0):
         super().__init__(timeout=None)
         self.boss_name = boss_name
         self.respawn_minutes = respawn_minutes
         self.channel = channel
+        self.score = score
         self.processing = False
+        self.participated = set()   # 시트 업데이트 완료된 닉네임
+        self.pending = set()        # 배치 대기 중인 닉네임
+        self._batch_task = None
+        self.cut_date = datetime.now().date()  # 보스 젠 날짜 저장
 
     # 축보스 → 일반보스 매핑 (컷 시 일반보스로 등록, 리젠 -24시간)
     CHUK_BOSS_MAP = {"축티르": "티르", "축토르": "토르", "축오딘": "오딘"}
@@ -593,10 +647,6 @@ class CutButton(discord.ui.View):
         elif self.respawn_minutes > 0:
             next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
             register_alert(self.channel, self.boss_name, next_respawn_dt, "처치 기반")
-        elif score > 0:
-            # 리젠시간 0인 보스(챕터 13)는 젠 알림이 없으므로 컷 시점에 즉시 시트 기록
-            loop = asyncio.get_event_loop()
-            sheet_ok = await loop.run_in_executor(None, record_cut_to_sheet, self.boss_name, score)
 
         button.disabled = True
         button.label = f"✅ {interaction.user.display_name} 컷"
@@ -625,6 +675,53 @@ class CutButton(discord.ui.View):
                 embed.add_field(name="다음 리젠", value=next_respawn_dt.strftime("%H:%M"), inline=True)
                 embed.add_field(name="리젠 시간", value=format_duration(self.respawn_minutes), inline=True)
         await self.channel.send(embed=embed)
+
+    @discord.ui.button(label="✋ 참여", style=discord.ButtonStyle.primary)
+    async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.score <= 0:
+            await interaction.response.send_message("❌ 이 보스는 참여 체크 대상이 아닙니다.", ephemeral=True)
+            return
+
+        # 날짜가 바뀐 경우 버튼 비활성화
+        if datetime.now().date() > self.cut_date:
+            button.disabled = True
+            button.label = "✋ 참여 (마감)"
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                "⏰ 참여 체크 시간이 종료되었습니다.\n시트에서 직접 체크하시거나 운영진에게 문의해주세요.",
+                ephemeral=True
+            )
+            return
+
+        nickname = extract_nickname(interaction.user.display_name)
+        if nickname in self.participated or nickname in self.pending:
+            await interaction.response.send_message("이미 참여 처리되었습니다.", ephemeral=True)
+            return
+
+        # 즉시 pending에 추가 후 응답 (중복 방지)
+        self.pending.add(nickname)
+        await interaction.response.send_message(f"✅ {nickname} 참여 완료!", ephemeral=True)
+
+        # 배치 태스크가 없거나 완료됐으면 새로 시작 (3초 대기 후 일괄 처리)
+        if self._batch_task is None or self._batch_task.done():
+            self._batch_task = asyncio.create_task(self._flush_batch())
+
+    async def _flush_batch(self):
+        await asyncio.sleep(3)  # 3초 대기해서 동시 참여자 모으기
+        if not self.pending:
+            return
+        nicknames = list(self.pending)
+        loop = asyncio.get_event_loop()
+        ok, result = await loop.run_in_executor(None, update_participation_batch, self.boss_name, nicknames)
+        if ok:
+            self.participated.update(nicknames)
+            self.pending.difference_update(nicknames)
+            if result:  # 시트에서 못 찾은 닉네임 (재시도 가능하게 pending에서 제거)
+                print(f"[참여] 시트 미등록 닉네임: {result}")
+        else:
+            # 실패 시 pending에서 제거 → 재시도 가능
+            self.pending.difference_update(nicknames)
+            print(f"[참여] 배치 업데이트 실패: {result}")
 
 
 # ────────── UI: 알림 설정 토글 버튼 ──────────
@@ -749,7 +846,7 @@ async def schedule_notify(channel, boss_name, target_dt, label):
 
     score = get_boss_score(boss_name)
     show_cut = not auto_renew and (respawn_minutes > 0 or score > 0)
-    view = CutButton(boss_name, respawn_minutes, channel) if show_cut else None
+    view = CutButton(boss_name, respawn_minutes, channel, score) if show_cut else None
     await channel.send("@here", embed=embed, view=view)
     await play_tts(channel, f"{boss_name} 시간입니다.")
     await send_kakao_alert(boss_name, "spawn")
@@ -853,6 +950,7 @@ def register_alert(channel, boss_name, target_dt, label):
     # alert_channel_id 설정 시 해당 채널로 고정, 없으면 입력 채널 사용
     alert_ch_id = get_setting("discord", "alert_channel_id")
     alert_channel = bot.get_channel(alert_ch_id) if alert_ch_id else None
+    print(f"[알림채널] alert_ch_id={alert_ch_id}, resolved={alert_channel}")
     notify_channel = alert_channel or channel
 
     boss_info[boss_name] = {"respawn_at": target_dt, "label": label}
