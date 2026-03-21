@@ -879,25 +879,33 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     embed.add_field(name="리젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
 
     score = get_boss_score(boss_name)
-    # 젠 알림 시 시트 기록 (score > 0인 보스만) — kill_sequence 먼저 확보
-    # _sheet_write_lock으로 직렬화: 동시 젠 시 한 번에 하나씩 처리해 충돌 방지
-    kill_sequence = 1
-    if score > 0:
-        loop = asyncio.get_event_loop()
-        async with _sheet_write_lock:
-            sheet_ok, kill_sequence = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
-        sheet_embed = discord.Embed(
-            description="✅ 시트 기록 완료" if sheet_ok else "⚠️ 시트 기록 실패",
-            color=discord.Color.green() if sheet_ok else discord.Color.red()
-        )
 
+    # 알림 메시지 먼저 즉시 전송 (시트 기록 대기 없이)
     show_cut = not auto_renew and (respawn_minutes > 0 or score > 0)
-    view = CutButton(boss_name, respawn_minutes, channel, score, kill_sequence) if show_cut else None
-    await channel.send("@here", embed=embed, view=view)
-    if score > 0:
-        await channel.send(embed=sheet_embed)
+    view = CutButton(boss_name, respawn_minutes, channel, score) if show_cut else None
+    msg = await channel.send("@here", embed=embed, view=view)
     await play_tts(channel, f"{boss_name} 시간입니다.")
     await send_kakao_alert(boss_name, "spawn")
+
+    # 시트 기록은 백그라운드에서 직렬화 처리 (동시 젠 시 충돌 방지)
+    if score > 0:
+        async def _record_and_update():
+            loop = asyncio.get_event_loop()
+            async with _sheet_write_lock:
+                sheet_ok, kill_sequence = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
+            # kill_sequence를 CutButton에 반영 (참여 버튼 정확도)
+            if view is not None:
+                view.kill_sequence = kill_sequence
+                try:
+                    await msg.edit(view=view)
+                except Exception:
+                    pass
+            sheet_embed = discord.Embed(
+                description="✅ 시트 기록 완료" if sheet_ok else "⚠️ 시트 기록 실패",
+                color=discord.Color.green() if sheet_ok else discord.Color.red()
+            )
+            await channel.send(embed=sheet_embed)
+        asyncio.create_task(_record_and_update())
 
     pending_tasks.pop(boss_name, None)
     boss_info.pop(boss_name, None)
