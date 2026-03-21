@@ -129,27 +129,41 @@ async def kakao_url_update_server():
 
     async def handle(reader: StreamReader, writer: StreamWriter):
         try:
-            data = await reader.read(4096)
-            text = data.decode()
-            # HTTP 요청에서 body 추출
-            if "\r\n\r\n" in text:
-                body = text.split("\r\n\r\n", 1)[1]
-            else:
-                body = text
+            # 헤더 읽기
+            header_data = b""
+            while b"\r\n\r\n" not in header_data:
+                chunk = await reader.read(1024)
+                if not chunk:
+                    break
+                header_data += chunk
+            header_text, _, rest = header_data.partition(b"\r\n\r\n")
+            # Content-Length로 body 크기 확인 후 나머지 읽기
+            content_length = 0
+            for line in header_text.decode("utf-8", errors="ignore").splitlines():
+                if line.lower().startswith("content-length:"):
+                    content_length = int(line.split(":", 1)[1].strip())
+            body_data = rest
+            while len(body_data) < content_length:
+                chunk = await reader.read(content_length - len(body_data))
+                if not chunk:
+                    break
+                body_data += chunk
+            body = body_data.decode("utf-8", errors="ignore").strip()
+            print(f"[카카오] 수신 body: {repr(body)}")
             payload = _json.loads(body)
             token = payload.get("token", "")
             new_url = payload.get("url", "")
             if token != KAKAO_UPDATE_TOKEN:
-                writer.write(b"HTTP/1.1 401 Unauthorized\r\n\r\n")
+                writer.write(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
             elif new_url:
                 set_setting(new_url, "kakao", "server_url")
                 print(f"[카카오] ngrok 주소 자동 업데이트: {new_url}")
-                writer.write(b"HTTP/1.1 200 OK\r\n\r\nok")
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
             else:
-                writer.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
+                writer.write(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
         except Exception as e:
             print(f"[카카오] URL 업데이트 오류: {e}")
-            writer.write(b"HTTP/1.1 500 Internal Server Error\r\n\r\n")
+            writer.write(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n")
         await writer.drain()
         writer.close()
 
