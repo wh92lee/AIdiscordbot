@@ -271,11 +271,24 @@ def fetch_my_score(nickname):
 
 
 def record_cut_to_sheet(boss_name, score=1):
-    """score만큼 행을 한 번의 batch_update로 삽입"""
+    """score만큼 행을 한 번의 batch_update로 삽입. 반환: (성공여부, kill_sequence)"""
     try:
         sheet = get_sheet()
         INSERT_BEFORE_ROW = 4       # 항상 4행 위에 삽입 (1-based)
         insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 3
+
+        # 삽입 전 오늘 날짜 + 보스명 기존 행 수 → kill_sequence 계산
+        try:
+            all_values = sheet.get_all_values()
+        except Exception:
+            reset_sheet_cache()
+            sheet = get_sheet()
+            all_values = sheet.get_all_values()
+        existing_count = sum(
+            1 for row in all_values[1:]
+            if row and is_today(row[0]) and len(row) > 1 and row[1].strip() == boss_name
+        )
+        kill_sequence = existing_count // max(score, 1) + 1
 
         # score행 한 번에 삽입 후 밀린 행 위치
         pushed_index = insert_index + score   # 0-based
@@ -380,9 +393,9 @@ def record_cut_to_sheet(boss_name, score=1):
             values,
             value_input_option="USER_ENTERED"
         )
-        print(f"[시트] 값 입력 완료 (날짜: {today}, 보스: {boss_name}, {score}행)")
+        print(f"[시트] 값 입력 완료 (날짜: {today}, 보스: {boss_name}, {score}행, kill_seq: {kill_sequence})")
 
-        return True
+        return True, kill_sequence
     except Exception as e:
         print(f"[시트 기록 오류] {e} — 캐시 초기화 후 재시도")
         reset_sheet_cache()
@@ -403,10 +416,10 @@ def record_cut_to_sheet(boss_name, score=1):
             values = [[today, boss_name]] * score
             sheet.update(f"A{INSERT_BEFORE_ROW}:B{INSERT_BEFORE_ROW + score - 1}", values, value_input_option="USER_ENTERED")
             print(f"[시트] 재시도 성공")
-            return True
+            return True, kill_sequence
         except Exception as e2:
             print(f"[시트 기록 오류] 재시도 실패: {e2}")
-            return False
+            return False, 1
 
 ALLOWED_ROLE = "운영진"
 
@@ -562,8 +575,11 @@ def parse_time(time_str, must_be_future=False):
     return dt
 
 
-def update_participation_batch(boss_name, nicknames):
-    """여러 닉네임을 한 번의 API 호출로 업데이트"""
+def update_participation_batch(boss_name, nicknames, kill_sequence=1, score=1):
+    """여러 닉네임을 한 번의 API 호출로 업데이트.
+    kill_sequence: 오늘 같은 보스의 몇 번째 킬인지 (1=첫 번째 킬=가장 오래된 그룹)
+    score: 해당 보스의 점수 (행 그룹 크기)
+    """
     try:
         sheet = get_sheet()
         try:
@@ -586,14 +602,28 @@ def update_participation_batch(boss_name, nicknames):
                     user_cols[nickname] = i
                     break
 
-        # 오늘 날짜 + 보스명 행 찾기 (1-based)
-        target_rows = []
+        # 오늘 날짜 + 보스명 행 찾기 (1-based, 오름차순)
+        all_matching_rows = []
         for i, row in enumerate(all_values[1:], start=2):
             if row and is_today(row[0]) and len(row) > 1 and row[1].strip() == boss_name:
-                target_rows.append(i)
+                all_matching_rows.append(i)
 
-        if not target_rows:
+        if not all_matching_rows:
             return False, f"오늘 '{boss_name}' 기록을 찾을 수 없습니다."
+
+        # kill_sequence로 올바른 행 그룹 선택
+        # 행은 삽입 시 위에 추가되므로: 가장 오래된 킬 = 하단 (높은 인덱스)
+        # kill_sequence=1 → 첫 번째 킬 → 마지막 score개 행
+        # kill_sequence=2 → 두 번째 킬 → 뒤에서 두 번째 score개 행
+        group_size = max(score, 1)
+        total_groups = len(all_matching_rows) // group_size
+        if total_groups == 0:
+            target_rows = all_matching_rows
+        else:
+            k = min(kill_sequence, total_groups)
+            end_idx = len(all_matching_rows) - (k - 1) * group_size
+            start_idx = end_idx - group_size
+            target_rows = all_matching_rows[start_idx:end_idx]
 
         # 모든 참여자 셀을 한 번에 업데이트
         updates = [
@@ -614,12 +644,13 @@ def update_participation_batch(boss_name, nicknames):
 # ────────── UI: 컷 버튼 ──────────
 
 class CutButton(discord.ui.View):
-    def __init__(self, boss_name, respawn_minutes, channel, score=0):
+    def __init__(self, boss_name, respawn_minutes, channel, score=0, kill_sequence=1):
         super().__init__(timeout=None)
         self.boss_name = boss_name
         self.respawn_minutes = respawn_minutes
         self.channel = channel
         self.score = score
+        self.kill_sequence = kill_sequence  # 오늘 같은 보스의 몇 번째 킬인지
         self.processing = False
         self.participated = set()   # 시트 업데이트 완료된 닉네임
         self.pending = set()        # 배치 대기 중인 닉네임
@@ -712,7 +743,9 @@ class CutButton(discord.ui.View):
             return
         nicknames = list(self.pending)
         loop = asyncio.get_event_loop()
-        ok, result = await loop.run_in_executor(None, update_participation_batch, self.boss_name, nicknames)
+        ok, result = await loop.run_in_executor(
+            None, update_participation_batch, self.boss_name, nicknames, self.kill_sequence, self.score
+        )
         if ok:
             self.participated.update(nicknames)
             self.pending.difference_update(nicknames)
@@ -845,21 +878,23 @@ async def schedule_notify(channel, boss_name, target_dt, label):
     embed.add_field(name="리젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
 
     score = get_boss_score(boss_name)
-    show_cut = not auto_renew and (respawn_minutes > 0 or score > 0)
-    view = CutButton(boss_name, respawn_minutes, channel, score) if show_cut else None
-    await channel.send("@here", embed=embed, view=view)
-    await play_tts(channel, f"{boss_name} 시간입니다.")
-    await send_kakao_alert(boss_name, "spawn")
-
-    # 젠 알림 시 시트 기록 (score > 0인 보스만)
+    # 젠 알림 시 시트 기록 (score > 0인 보스만) — kill_sequence 먼저 확보
+    kill_sequence = 1
     if score > 0:
         loop = asyncio.get_event_loop()
-        sheet_ok = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
+        sheet_ok, kill_sequence = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, score)
         sheet_embed = discord.Embed(
             description="✅ 시트 기록 완료" if sheet_ok else "⚠️ 시트 기록 실패",
             color=discord.Color.green() if sheet_ok else discord.Color.red()
         )
+
+    show_cut = not auto_renew and (respawn_minutes > 0 or score > 0)
+    view = CutButton(boss_name, respawn_minutes, channel, score, kill_sequence) if show_cut else None
+    await channel.send("@here", embed=embed, view=view)
+    if score > 0:
         await channel.send(embed=sheet_embed)
+    await play_tts(channel, f"{boss_name} 시간입니다.")
+    await send_kakao_alert(boss_name, "spawn")
 
     pending_tasks.pop(boss_name, None)
     boss_info.pop(boss_name, None)
