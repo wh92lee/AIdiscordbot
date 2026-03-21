@@ -119,7 +119,9 @@ async def send_kakao_alert(boss_name, alert_type):
         print(f"[카카오] 전송 실패: {e}")
 
 
-def get_sheet():
+_sheet_cache = None
+
+def _connect_sheet():
     creds = Credentials.from_service_account_file(
         CREDENTIALS_FILE,
         scopes=[
@@ -129,6 +131,16 @@ def get_sheet():
     )
     gc = gspread.authorize(creds)
     return gc.open(SPREADSHEET_NAME).worksheet(SHEET_NAME)
+
+def get_sheet():
+    global _sheet_cache
+    if _sheet_cache is None:
+        _sheet_cache = _connect_sheet()
+    return _sheet_cache
+
+def reset_sheet_cache():
+    global _sheet_cache
+    _sheet_cache = None
 
 
 def extract_nickname(display_name):
@@ -179,7 +191,12 @@ def fetch_score_rank():
     """
     try:
         sheet = get_sheet()
-        all_values = sheet.get_all_values()
+        try:
+            all_values = sheet.get_all_values()
+        except Exception:
+            reset_sheet_cache()
+            sheet = get_sheet()
+            all_values = sheet.get_all_values()
 
         if len(all_values) < 2:
             return None, "시트 데이터가 부족합니다."
@@ -212,7 +229,12 @@ def fetch_my_score(nickname):
     """
     try:
         sheet = get_sheet()
-        all_values = sheet.get_all_values()
+        try:
+            all_values = sheet.get_all_values()
+        except Exception:
+            reset_sheet_cache()
+            sheet = get_sheet()
+            all_values = sheet.get_all_values()
 
         if not all_values:
             return None, "시트가 비어있습니다."
@@ -362,8 +384,29 @@ def record_cut_to_sheet(boss_name, score=1):
 
         return True
     except Exception as e:
-        print(f"[시트 기록 오류] {e}")
-        return False
+        print(f"[시트 기록 오류] {e} — 캐시 초기화 후 재시도")
+        reset_sheet_cache()
+        try:
+            sheet = get_sheet()
+            INSERT_BEFORE_ROW = 4
+            insert_index = INSERT_BEFORE_ROW - 1
+            pushed_index = insert_index + score
+            sheet.spreadsheet.batch_update({"requests": [
+                {"insertDimension": {"range": {"sheetId": sheet.id, "dimension": "ROWS", "startIndex": insert_index, "endIndex": insert_index + score}, "inheritFromBefore": False}},
+                {"copyPaste": {"source": {"sheetId": sheet.id, "startRowIndex": pushed_index, "endRowIndex": pushed_index + 1, "startColumnIndex": 0, "endColumnIndex": 44}, "destination": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 0, "endColumnIndex": 44}, "pasteType": "PASTE_FORMAT"}},
+                {"copyPaste": {"source": {"sheetId": sheet.id, "startRowIndex": pushed_index, "endRowIndex": pushed_index + 1, "startColumnIndex": 1, "endColumnIndex": 2}, "destination": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 1, "endColumnIndex": 2}, "pasteType": "PASTE_DATA_VALIDATION"}},
+                {"repeatCell": {"range": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 2, "endColumnIndex": 44}, "cell": {"userEnteredFormat": {"numberFormat": {}}}, "fields": "userEnteredFormat.numberFormat"}},
+                {"setDataValidation": {"range": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 2, "endColumnIndex": 44}, "rule": {"condition": {"type": "BOOLEAN"}, "strict": True}}},
+                {"updateBorders": {"range": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 0, "endColumnIndex": 44}, "top": {"style": "SOLID", "width": 1}, "bottom": {"style": "SOLID", "width": 1}, "left": {"style": "SOLID", "width": 1}, "right": {"style": "SOLID", "width": 1}, "innerHorizontal": {"style": "SOLID", "width": 1}, "innerVertical": {"style": "SOLID", "width": 1}}}
+            ]})
+            today = datetime.now().strftime("%m/%d")
+            values = [[today, boss_name]] * score
+            sheet.update(f"A{INSERT_BEFORE_ROW}:B{INSERT_BEFORE_ROW + score - 1}", values, value_input_option="USER_ENTERED")
+            print(f"[시트] 재시도 성공")
+            return True
+        except Exception as e2:
+            print(f"[시트 기록 오류] 재시도 실패: {e2}")
+            return False
 
 ALLOWED_ROLE = "운영진"
 
