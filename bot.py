@@ -92,7 +92,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 KAKAO_SERVER_URL = get_setting("kakao", "server_url", default="")
 KAKAO_TOKEN      = get_setting("kakao", "token", default="bsbot-kakao-token")
-KAKAO_UPDATE_PORT = 22409
+KAKAO_UPDATE_PORT = 8765
 KAKAO_UPDATE_TOKEN = KAKAO_TOKEN
 
 SPREADSHEET_NAME = get_setting("sheet", "spreadsheet_name", default="보탐봇테스트")
