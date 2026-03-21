@@ -16,11 +16,13 @@ powershell -Command ^
   "$url = (Invoke-RestMethod http://localhost:4040/api/tunnels).tunnels[0].public_url;" ^
   "Write-Host '[카카오봇] ngrok 주소:' $url;" ^
   "$body = @{url=$url; token='bsbot-kakao-token'} | ConvertTo-Json;" ^
-  "try { Invoke-RestMethod -Uri 'http://168.107.17.244:8765' -Method POST -Body $body -ContentType 'application/json'; Write-Host '[카카오봇] 봇 서버 주소 업데이트 완료'; } catch { Write-Host '[카카오봇] 봇 서버 업데이트 실패:' $_.Exception.Message }"
+  "try { Invoke-RestMethod -Uri 'http://168.107.17.244:8765' -Method POST -Body $body -ContentType 'application/json'; Write-Host '[카카오봇] 봇 서버 주소 업데이트 완료'; } catch { Write-Host '[카카오봇] 봇 서버 업데이트 실패:' $_.Exception.Message }" ^
+  " | Out-File -FilePath 'C:\kakaobot\start_log.txt' -Encoding utf8
 
 :: kakao_server.py 백그라운드 실행
 echo [카카오봇] kakao_server.py 시작 중...
 start /B "" pythonw "C:\kakaobot\kakao_server.py"
 
 echo [카카오봇] 모든 서비스 시작 완료!
-timeout /t 3 >nul
+echo 로그: C:\kakaobot\start_log.txt
+pause
