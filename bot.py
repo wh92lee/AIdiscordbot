@@ -732,7 +732,7 @@ class CutButton(discord.ui.View):
 
         # 즉시 pending에 추가 후 응답 (중복 방지)
         self.pending.add(nickname)
-        await interaction.response.send_message(f"✅ {nickname} 참여 완료!", ephemeral=True)
+        await interaction.response.send_message(f"✅ {nickname} 참여 완료!\n`내참여`로 체크 여부를 확인하세요.", ephemeral=True)
 
         # 배치 태스크가 없거나 완료됐으면 새로 시작 (3초 대기 후 일괄 처리)
         if self._batch_task is None or self._batch_task.done():
