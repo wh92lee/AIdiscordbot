@@ -135,6 +135,22 @@ def alert():
     return jsonify({"ok": True})
 
 
+@app.route("/message", methods=["POST"])
+def message_route():
+    # 토큰 검증
+    token = request.headers.get("X-Token")
+    if token != SECRET_TOKEN:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    data = request.json
+    msg = data.get("message", "")
+    if not msg:
+        return jsonify({"ok": False, "error": "No message"}), 400
+
+    threading.Thread(target=send_message, args=(msg,), daemon=False).start()
+    return jsonify({"ok": True})
+
+
 @app.route("/ping", methods=["GET"])
 def ping():
     return jsonify({"ok": True, "status": "running"})

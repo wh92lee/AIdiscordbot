@@ -122,6 +122,28 @@ async def send_kakao_alert(boss_name, alert_type):
         print(f"[카카오] 전송 실패: {e}")
 
 
+async def send_kakao_message(text):
+    """카카오톡으로 임의 텍스트 전송"""
+    url = get_setting("kakao", "server_url", default="")
+    if not url:
+        return
+    try:
+        import urllib.request
+        import json as _json
+        body = _json.dumps({"message": text}).encode()
+        req = urllib.request.Request(
+            f"{url}/message",
+            data=body,
+            headers={"Content-Type": "application/json", "X-Token": KAKAO_TOKEN},
+            method="POST"
+        )
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, urllib.request.urlopen, req)
+        print(f"[카카오] 메시지 전송 완료")
+    except Exception as e:
+        print(f"[카카오] 전송 실패: {e}")
+
+
 async def kakao_url_update_server():
     """Windows .bat에서 ngrok 새 주소를 받아 settings.json 자동 업데이트"""
     import json as _json
@@ -1096,6 +1118,13 @@ async def on_message(message):
             return
         ctx = await bot.get_context(message)
         await status(ctx)
+        # 운영진이 조회 시 카카오톡으로도 현황 전송
+        lines = _build_status_lines()
+        if lines:
+            import re
+            plain = re.sub(r"\*\*|`", "", "\n".join(lines))
+            kakao_text = f"[ 츄츄봇 - 보스현황 ]\n{plain}"
+            await send_kakao_message(kakao_text)
         return
 
     # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
@@ -1271,13 +1300,11 @@ async def set_respawn(ctx, boss_name: str, *time_parts: str):
     await ctx.send(embed=embed)
 
 
-@bot.command(name="현황")
-async def status(ctx):
+def _build_status_lines():
+    """리젠 대기 현황 줄 목록 반환. 활성 보스 없으면 빈 리스트."""
     active = {k: v for k, v in pending_tasks.items() if not v.done()}
-
     if not active:
-        await ctx.send("⚠️ 현재 대기 중인 보스 알림이 없습니다.")
-        return
+        return []
 
     sorted_bosses = sorted(
         [name for name in active if name in boss_info],
@@ -1310,7 +1337,6 @@ async def status(ctx):
             target_dt = info["respawn_at"]
             label = info["label"]
 
-            # 날짜가 바뀌는 시점에 날짜 구분선 추가
             boss_date = target_dt.date()
             if boss_date != today and boss_date not in shown_dates:
                 lines.append("")
@@ -1322,13 +1348,22 @@ async def status(ctx):
                 f"`{i}.` **{boss_name}**  ⏱ {format_remaining(target_dt)}  |  🕐 {target_dt.strftime('%H:%M')}  |  {label}"
             )
 
-    # 비활성화 보스 목록 추가
     bosses = load_bosses()
     config = load_config()
     disabled = [name for name in bosses if not config.get(name, True)]
     if disabled:
         lines.append("")
         lines.append("🔴 **알림 비활성화**  " + "  |  ".join(disabled))
+
+    return lines
+
+
+@bot.command(name="현황")
+async def status(ctx):
+    lines = _build_status_lines()
+    if not lines:
+        await ctx.send("⚠️ 현재 대기 중인 보스 알림이 없습니다.")
+        return
 
     embed = discord.Embed(
         title="⏰ 리젠 대기 현황",
