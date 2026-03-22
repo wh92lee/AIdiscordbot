@@ -176,7 +176,7 @@ async def send_kakao_status():
 async def kakao_status_scheduler():
     """매일 07:00, 19:00에 카카오톡으로 보스현황 자동 전송"""
     import asyncio as _asyncio
-    target_hours = {7, 19}
+    target_hours = {0, 6, 12, 18}
     sent_today = set()
     while True:
         now = datetime.now()
