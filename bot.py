@@ -856,13 +856,47 @@ class CutButton(discord.ui.View):
             await interaction.response.send_message("이미 참여 처리되었습니다.", ephemeral=True)
             return
 
-        # 즉시 pending에 추가 후 응답 (중복 방지)
-        self.pending.add(nickname)
-        await interaction.response.send_message(f"✅ {nickname} 참여 완료!\n`내참여`로 체크 여부를 확인하세요.", ephemeral=True)
+        # defer로 로딩 표시 (배치 완료 후 결과 전송)
+        await interaction.response.defer(ephemeral=True)
 
-        # 배치 태스크가 없거나 완료됐으면 새로 시작 (3초 대기 후 일괄 처리)
+        # pending에 추가 후 배치 태스크 시작
+        self.pending.add(nickname)
         if self._batch_task is None or self._batch_task.done():
             self._batch_task = asyncio.create_task(self._flush_batch())
+
+        # 배치 완료 대기
+        await self._batch_task
+
+        # 시트 조회 후 참여현황 표시
+        loop = asyncio.get_event_loop()
+        today_rows, user_rate, error = await loop.run_in_executor(None, fetch_my_score, nickname)
+        today = datetime.now().strftime("%m/%d")
+
+        if error or not today_rows:
+            await interaction.followup.send(f"✅ {nickname} 참여 완료!", ephemeral=True)
+        else:
+            lines = []
+            participated_count = 0
+            for boss_name, participated in today_rows:
+                if participated:
+                    lines.append(f"✅ {boss_name}  참여")
+                    participated_count += 1
+                else:
+                    lines.append(f"❌ {boss_name}  미참")
+            author_text = f"{nickname}  (총 참여율: {user_rate})" if user_rate else nickname
+            embed = discord.Embed(
+                title="📊 금일 참여현황",
+                description="\n".join(lines),
+                color=discord.Color.blurple()
+            )
+            embed.set_author(name=author_text)
+            embed.set_footer(text=f"{today}  |  총 {len(today_rows)}보스 중 {participated_count}개 참여")
+            msg = await interaction.followup.send(embed=embed, ephemeral=True)
+            await asyncio.sleep(30)
+            try:
+                await msg.delete()
+            except Exception:
+                pass
 
     async def _flush_batch(self):
         await asyncio.sleep(3)  # 3초 대기해서 동시 참여자 모으기
