@@ -778,7 +778,7 @@ class CutButton(discord.ui.View):
         self.participated = set()   # 시트 업데이트 완료된 닉네임
         self.pending = set()        # 배치 대기 중인 닉네임
         self._batch_task = None
-        self.cut_date = datetime.now().date()  # 보스 젠 날짜 저장
+        self.cut_deadline = None  # 컷 버튼 누른 시각 + 12시간
         # 참여 버튼 초기 비활성화 (컷 버튼 누른 후 활성화)
         self.participate.disabled = True
 
@@ -808,6 +808,7 @@ class CutButton(discord.ui.View):
         button.label = f"✅ {interaction.user.display_name} 컷"
         if self.score > 0:
             self.participate.disabled = False
+            self.cut_deadline = now + timedelta(hours=12)
         await interaction.response.edit_message(view=self)
 
         if self.boss_name in self.CHUK_BOSS_MAP:
@@ -840,8 +841,8 @@ class CutButton(discord.ui.View):
             await interaction.response.send_message("❌ 이 보스는 참여 체크 대상이 아닙니다.", ephemeral=True)
             return
 
-        # 날짜가 바뀐 경우 버튼 비활성화
-        if datetime.now().date() > self.cut_date:
+        # 컷 후 12시간 초과 시 버튼 비활성화
+        if self.cut_deadline and datetime.now() > self.cut_deadline:
             button.disabled = True
             button.label = "✋ 참여 (마감)"
             await interaction.response.edit_message(view=self)
