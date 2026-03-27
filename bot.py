@@ -167,7 +167,9 @@ async def send_kakao_status():
         elif boss_date != today and boss_date not in shown_dates:
             kakao_lines.append(f"─── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───")
             shown_dates.add(boss_date)
-        kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} )")
+        score = get_boss_score(boss_name)
+        stars = "⭐" * score if score > 0 else ""
+        kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} ) {stars}".rstrip())
     if kakao_lines:
         kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
         await send_kakao_message(kakao_text)
