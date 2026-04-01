@@ -23,6 +23,7 @@ boss_info = {}
 
 # group_key(가장 빠른 보스이름) -> asyncio.Task (5분 전 묶음 알림)
 group_warning_tasks = {}
+grouped_bosses = set()  # 묶음 5분전 알림에 포함된 보스 (개별 5분전 알림 스킵용)
 
 CONFIG_FILE   = "boss_config.json"
 SETTINGS_FILE = "settings.json"
@@ -1010,19 +1011,20 @@ async def play_tts(text_channel, text):
 # ────────── 알림 스케줄링 ──────────
 
 async def schedule_notify(channel, boss_name, target_dt, label):
-    # 5분 전 단독 알림
+    # 5분 전 단독 알림 (묶음 알림에 포함된 보스는 스킵)
     warning_secs = (target_dt - timedelta(minutes=5) - datetime.now()).total_seconds()
     if warning_secs > 0:
         await asyncio.sleep(warning_secs)
-        embed = discord.Embed(
-            title="⚠️ 보스 리젠 5분 전!",
-            description=f"**{boss_name}** 이(가) 5분 후 리젠됩니다!",
-            color=discord.Color.yellow()
-        )
-        embed.add_field(name="젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
-        await channel.send("@here", embed=embed)
-        await play_tts(channel, f"{boss_name} 5분 전 입니다.")
-        await send_kakao_alert(boss_name, "5min")
+        if boss_name not in grouped_bosses:
+            embed = discord.Embed(
+                title="⚠️ 보스 리젠 5분 전!",
+                description=f"**{boss_name}** 이(가) 5분 후 리젠됩니다!",
+                color=discord.Color.yellow()
+            )
+            embed.add_field(name="젠 시각", value=target_dt.strftime("%H:%M"), inline=True)
+            await channel.send("@here", embed=embed)
+            await play_tts(channel, f"{boss_name} 5분 전 입니다.")
+            await send_kakao_alert(boss_name, "5min")
 
     remaining = (target_dt - datetime.now()).total_seconds()
     if remaining > 0:
@@ -1102,7 +1104,7 @@ def compute_groups():
 
     current_group = [active[0]]
     for item in active[1:]:
-        if (item[1] - current_group[0][1]).total_seconds() <= 600:
+        if (item[1] - current_group[0][1]).total_seconds() <= 300:
             current_group.append(item)
         else:
             groups.append(current_group)
@@ -1142,14 +1144,18 @@ async def send_group_warning(channel, group):
 
 
 def recalculate_group_warnings(channel):
+    global grouped_bosses
     for task in group_warning_tasks.values():
         task.cancel()
     group_warning_tasks.clear()
 
+    grouped_bosses = set()
     for group in compute_groups():
         key = group[0][0]
         task = asyncio.create_task(send_group_warning(channel, group))
         group_warning_tasks[key] = task
+        for name, _ in group:
+            grouped_bosses.add(name)
 
 
 def register_alert(channel, boss_name, target_dt, label):
