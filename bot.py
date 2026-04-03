@@ -1142,6 +1142,12 @@ async def send_group_warning(channel, group):
     names_tts = ", ".join(name for name, _ in active_group)
     await play_tts(channel, f"{names_tts} 5분 전 입니다.")
 
+    # 카카오톡 묶음 5분 전 알림
+    kakao_lines = ["[ 츄츄봇 - 보스알림 ]", "5분 전 리젠 예정 보스"]
+    for name, dt in active_group:
+        kakao_lines.append(f"· {name} ( 🕐 {dt.strftime('%H:%M')} )")
+    await send_kakao_message("\n".join(kakao_lines))
+
 
 def recalculate_group_warnings(channel):
     global grouped_bosses
