@@ -1295,7 +1295,9 @@ async def on_ready():
             boss_info[boss_name] = {"respawn_at": target_dt, "label": label}
             task = asyncio.create_task(schedule_notify(channel, boss_name, target_dt, label))
             pending_tasks[boss_name] = task
-            recalculate_group_warnings(channel)
+            alert_ch_id = get_setting("discord", "alert_channel_id")
+            notify_ch = bot.get_channel(alert_ch_id) if alert_ch_id else channel
+            recalculate_group_warnings(notify_ch)
             restored.append(boss_name)
 
     # 복구 결과 채널에 안내
@@ -1567,7 +1569,9 @@ async def cancel_boss(ctx, *, boss_name: str):
     boss_info.pop(matched, None)
     delete_respawn_entry(matched)
 
-    recalculate_group_warnings(ctx.channel)
+    alert_ch_id = get_setting("discord", "alert_channel_id")
+    notify_ch = bot.get_channel(alert_ch_id) if alert_ch_id else ctx.channel
+    recalculate_group_warnings(notify_ch)
 
     await ctx.send(f"✅ **{matched}** 알림이 취소되었습니다.")
 
