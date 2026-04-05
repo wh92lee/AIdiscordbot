@@ -798,10 +798,10 @@ class CutButton(discord.ui.View):
         now = datetime.now()
         score = get_boss_score(self.boss_name)
 
-        # 축보스 컷 처리: 일반보스로 (리젠 - 24시간) 등록
+        # 축보스 컷 처리: 일반보스로 (동일 리젠 시간) 등록
         if self.boss_name in self.CHUK_BOSS_MAP:
             normal_boss = self.CHUK_BOSS_MAP[self.boss_name]
-            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes - 1440)
+            next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
             register_alert(self.channel, normal_boss, next_respawn_dt, "처치 기반")
         elif self.respawn_minutes > 0:
             next_respawn_dt = now + timedelta(minutes=self.respawn_minutes)
