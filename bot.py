@@ -1640,6 +1640,118 @@ async def score_rank(ctx):
     await ctx.send(embed=embed)
 
 
+class ManualAddView(discord.ui.View):
+    """!추가 명령어용 참여 버튼 뷰."""
+    def __init__(self, boss_name, kill_sequence=1):
+        super().__init__(timeout=None)
+        self.boss_name = boss_name
+        self.kill_sequence = kill_sequence
+        self.score = 1
+        self.participated = set()
+        self.pending = set()
+        self._batch_task = None
+        self.cut_deadline = datetime.now() + timedelta(hours=12)
+
+    @discord.ui.button(label="✋ 참여", style=discord.ButtonStyle.primary)
+    async def participate(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.cut_deadline and datetime.now() > self.cut_deadline:
+            button.disabled = True
+            button.label = "✋ 참여 (마감)"
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(
+                "⏰ 참여 체크 시간이 종료되었습니다.", ephemeral=True)
+            return
+
+        nickname = extract_nickname(interaction.user.display_name)
+        if nickname in self.participated or nickname in self.pending:
+            await interaction.response.send_message("이미 참여 처리되었습니다.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        self.pending.add(nickname)
+        if self._batch_task is None or self._batch_task.done():
+            self._batch_task = asyncio.create_task(self._flush_batch())
+        await self._batch_task
+
+        loop = asyncio.get_event_loop()
+        today_rows, user_rate, error = await loop.run_in_executor(None, fetch_my_score, nickname)
+        today = datetime.now().strftime("%m/%d")
+
+        if error or not today_rows:
+            await interaction.followup.send(f"✅ {nickname} 참여 완료!", ephemeral=True)
+        else:
+            lines = []
+            participated_count = 0
+            for bname, part in today_rows:
+                if part:
+                    lines.append(f"✅ {bname}  참여")
+                    participated_count += 1
+                else:
+                    lines.append(f"❌ {bname}  미참")
+            author_text = f"{nickname}  (총 참여율: {user_rate})" if user_rate else nickname
+            embed = discord.Embed(
+                title="📊 금일 참여현황",
+                description="\n".join(lines),
+                color=discord.Color.blurple()
+            )
+            embed.set_author(name=author_text)
+            embed.set_footer(text=f"{today}  |  총 {len(today_rows)}보스 중 {participated_count}개 참여")
+            msg = await interaction.followup.send(embed=embed, ephemeral=True)
+            await asyncio.sleep(30)
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+
+    async def _flush_batch(self):
+        await asyncio.sleep(3)
+        if not self.pending:
+            return
+        nicknames = list(self.pending)
+        loop = asyncio.get_event_loop()
+        ok, result = await loop.run_in_executor(
+            None, update_participation_batch, self.boss_name, nicknames, self.kill_sequence, self.score
+        )
+        if ok:
+            self.participated.update(nicknames)
+            self.pending.difference_update(nicknames)
+            if result:
+                print(f"[추가참여] 시트 미등록 닉네임: {result}")
+        else:
+            self.pending.difference_update(nicknames)
+            print(f"[추가참여] 배치 업데이트 실패: {result}")
+
+
+@bot.command(name="추가")
+async def manual_add(ctx, boss_name: str = None):
+    if not boss_name:
+        await ctx.send("❌ 사용법: `!추가 보스명`")
+        return
+
+    loop = asyncio.get_event_loop()
+    ok, kill_sequence = await loop.run_in_executor(None, record_cut_to_sheet, boss_name, 1)
+
+    if not ok:
+        await ctx.send(f"❌ 시트 기록에 실패했습니다.")
+        return
+
+    now_hour = datetime.now().hour
+    recorded_score = 2 if (now_hour >= 23 or now_hour < 8) else 1
+    today = datetime.now().strftime("%m/%d")
+
+    embed = discord.Embed(
+        title="📝 출석 추가 완료",
+        description=f"**{boss_name}** 출석이 기록되었습니다.",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="날짜", value=today, inline=True)
+    embed.add_field(name="점수", value=f"{recorded_score}점", inline=True)
+    embed.set_footer(text=f"등록자: {ctx.author.display_name}")
+
+    view = ManualAddView(boss_name, kill_sequence=kill_sequence)
+    await ctx.send(embed=embed, view=view)
+
+
 async def show_commands(ctx):
     embed = discord.Embed(
         title="📖 명령어 목록",
