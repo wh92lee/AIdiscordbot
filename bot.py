@@ -479,9 +479,11 @@ def record_cut_to_sheet(boss_name, score=1):
             }}
         ]})
         today = datetime.now().strftime("%m/%d")
+        now_hour = datetime.now().hour
+        recorded_score = score * 2 if (now_hour >= 23 or now_hour < 8) else score
         sheet.update(
             f"A{INSERT_BEFORE_ROW}:C{INSERT_BEFORE_ROW}",
-            [[today, score, boss_name]],
+            [[today, recorded_score, boss_name]],
             value_input_option="USER_ENTERED"
         )
 
