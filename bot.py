@@ -259,7 +259,12 @@ def _connect_sheet():
         ]
     )
     gc = gspread.authorize(creds)
-    return gc.open(SPREADSHEET_NAME).worksheet(SHEET_NAME)
+    spreadsheet = gc.open(SPREADSHEET_NAME)
+    try:
+        return spreadsheet.worksheet(SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        available = [ws.title for ws in spreadsheet.worksheets()]
+        raise Exception(f"시트 탭 '{SHEET_NAME}' 없음. 실제 탭 목록: {available}")
 
 def get_sheet():
     global _sheet_cache
