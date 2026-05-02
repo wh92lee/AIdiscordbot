@@ -53,9 +53,12 @@ def is_enabled(boss_name):
 # ────────── 설정 파일 (settings.json) ──────────
 
 def load_settings():
-    """settings.json에서 전체 설정값 로드"""
-    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """settings.json에서 전체 설정값 로드. 파일 없으면 빈 dict 반환."""
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
 
 def save_settings(settings):
