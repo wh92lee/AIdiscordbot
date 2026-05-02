@@ -406,7 +406,7 @@ def fetch_my_score(nickname):
 
 def record_cut_to_sheet(boss_name, score=1):
     """항상 1행 삽입. A=날짜, B=점수, C=보스명, D~=체크박스. 반환: (성공여부, kill_sequence)"""
-    INSERT_BEFORE_ROW = 5       # 항상 5행 위에 삽입 (1-based)
+    INSERT_BEFORE_ROW = 6       # 항상 6행 위에 삽입 (1-based)
     insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 5
     pushed_index = insert_index + 1       # 삽입 후 밀린 행 위치 (항상 1행)
 
