@@ -331,7 +331,7 @@ def fetch_score_rank():
         rate_row   = all_values[1]   # 2행: 참여율
 
         result = []
-        for i in range(2, min(44, len(header_row))):
+        for i in range(3, min(45, len(header_row))):
             nickname = header_row[i].strip()
             if not nickname:
                 continue
@@ -369,9 +369,9 @@ def fetch_my_score(nickname):
 
         rate_row = all_values[1] if len(all_values) > 1 else []  # 2행: 참여율
 
-        # C열(index 2) ~ AR열(index 43)에서 닉네임 매칭
+        # D열(index 3) ~ AS열(index 44)에서 닉네임 매칭
         user_col = None
-        for i in range(2, min(44, len(header_row))):
+        for i in range(3, min(45, len(header_row))):
             if header_row[i].strip() == nickname:
                 user_col = i
                 break
@@ -382,12 +382,12 @@ def fetch_my_score(nickname):
         # 2행에서 해당 유저 참여율 가져오기
         user_rate = rate_row[user_col].strip() if user_col < len(rate_row) else ""
 
-        # 오늘 날짜 행 필터링
+        # 오늘 날짜 행 필터링 (보스명은 C열, index 2)
         today_rows = []
         for row in all_values[1:]:
             if not row or not is_today(row[0]):
                 continue
-            boss_name = row[1].strip() if len(row) > 1 else "?"
+            boss_name = row[2].strip() if len(row) > 2 else "?"
             participated = row[user_col].strip().upper() == "TRUE" if len(row) > user_col else False
             today_rows.append((boss_name, participated))
 
@@ -397,36 +397,20 @@ def fetch_my_score(nickname):
 
 
 def record_cut_to_sheet(boss_name, score=1):
-    """score만큼 행을 한 번의 batch_update로 삽입. 반환: (성공여부, kill_sequence)"""
-    try:
-        sheet = get_sheet()
-        INSERT_BEFORE_ROW = 4       # 항상 4행 위에 삽입 (1-based)
-        insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 3
+    """항상 1행 삽입. A=날짜, B=점수, C=보스명, D~=체크박스. 반환: (성공여부, kill_sequence)"""
+    INSERT_BEFORE_ROW = 6       # 항상 6행 위에 삽입 (1-based)
+    insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 5
+    pushed_index = insert_index + 1       # 삽입 후 밀린 행 위치 (항상 1행)
 
-        # 삽입 전 오늘 날짜 + 보스명 기존 행 수 → kill_sequence 계산
-        try:
-            all_values = sheet.get_all_values()
-        except Exception:
-            reset_sheet_cache()
-            sheet = get_sheet()
-            all_values = sheet.get_all_values()
-        existing_count = sum(
-            1 for row in all_values[1:]
-            if row and is_today(row[0]) and len(row) > 1 and row[1].strip() == boss_name
-        )
-        kill_sequence = existing_count // max(score, 1) + 1
-
-        # score행 한 번에 삽입 후 밀린 행 위치
-        pushed_index = insert_index + score   # 0-based
-
+    def _do_insert(sheet):
         sheet.spreadsheet.batch_update({"requests": [
-            # score행 한 번에 삽입
+            # 1행 삽입
             {"insertDimension": {
                 "range": {
                     "sheetId": sheet.id,
                     "dimension": "ROWS",
                     "startIndex": insert_index,
-                    "endIndex": insert_index + score
+                    "endIndex": insert_index + 1
                 },
                 "inheritFromBefore": False
             }},
@@ -437,55 +421,37 @@ def record_cut_to_sheet(boss_name, score=1):
                     "startRowIndex": pushed_index,
                     "endRowIndex": pushed_index + 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 44
+                    "endColumnIndex": 45
                 },
                 "destination": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
-                    "endRowIndex": insert_index + score,
+                    "endRowIndex": insert_index + 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 44
+                    "endColumnIndex": 45
                 },
                 "pasteType": "PASTE_FORMAT"
             }},
-            # B열 드롭박스 유효성 복사
-            {"copyPaste": {
-                "source": {
-                    "sheetId": sheet.id,
-                    "startRowIndex": pushed_index,
-                    "endRowIndex": pushed_index + 1,
-                    "startColumnIndex": 1,
-                    "endColumnIndex": 2
-                },
-                "destination": {
-                    "sheetId": sheet.id,
-                    "startRowIndex": insert_index,
-                    "endRowIndex": insert_index + score,
-                    "startColumnIndex": 1,
-                    "endColumnIndex": 2
-                },
-                "pasteType": "PASTE_DATA_VALIDATION"
-            }},
-            # C~AR열 숫자 서식 초기화
+            # D~AS열 숫자 서식 초기화
             {"repeatCell": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
-                    "endRowIndex": insert_index + score,
-                    "startColumnIndex": 2,
-                    "endColumnIndex": 44
+                    "endRowIndex": insert_index + 1,
+                    "startColumnIndex": 3,
+                    "endColumnIndex": 45
                 },
                 "cell": {"userEnteredFormat": {"numberFormat": {}}},
                 "fields": "userEnteredFormat.numberFormat"
             }},
-            # C~AR열 체크박스 데이터 유효성 적용
+            # D~AS열 체크박스 데이터 유효성 적용
             {"setDataValidation": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
-                    "endRowIndex": insert_index + score,
-                    "startColumnIndex": 2,
-                    "endColumnIndex": 44
+                    "endRowIndex": insert_index + 1,
+                    "startColumnIndex": 3,
+                    "endColumnIndex": 45
                 },
                 "rule": {
                     "condition": {"type": "BOOLEAN"},
@@ -497,9 +463,9 @@ def record_cut_to_sheet(boss_name, score=1):
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
-                    "endRowIndex": insert_index + score,
+                    "endRowIndex": insert_index + 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 44
+                    "endColumnIndex": 45
                 },
                 "top":    {"style": "SOLID", "width": 1},
                 "bottom": {"style": "SOLID", "width": 1},
@@ -509,40 +475,40 @@ def record_cut_to_sheet(boss_name, score=1):
                 "innerVertical":   {"style": "SOLID", "width": 1}
             }}
         ]})
-        print(f"[시트] {score}행 삽입 및 서식 복사 완료 (행 {INSERT_BEFORE_ROW}~{INSERT_BEFORE_ROW + score - 1})")
-
-        # A/B열 값 한 번에 입력
         today = datetime.now().strftime("%m/%d")
-        values = [[today, boss_name]] * score
         sheet.update(
-            f"A{INSERT_BEFORE_ROW}:B{INSERT_BEFORE_ROW + score - 1}",
-            values,
+            f"A{INSERT_BEFORE_ROW}:C{INSERT_BEFORE_ROW}",
+            [[today, score, boss_name]],
             value_input_option="USER_ENTERED"
         )
-        print(f"[시트] 값 입력 완료 (날짜: {today}, 보스: {boss_name}, {score}행, kill_seq: {kill_sequence})")
 
+    try:
+        sheet = get_sheet()
+        try:
+            all_values = sheet.get_all_values()
+        except Exception:
+            reset_sheet_cache()
+            sheet = get_sheet()
+            all_values = sheet.get_all_values()
+
+        # 오늘 같은 보스명(C열) 기존 행 수 → kill_sequence 계산
+        existing_count = sum(
+            1 for row in all_values[1:]
+            if row and is_today(row[0]) and len(row) > 2 and row[2].strip() == boss_name
+        )
+        kill_sequence = existing_count + 1
+
+        _do_insert(sheet)
+        print(f"[시트] 1행 삽입 완료 (행 {INSERT_BEFORE_ROW}, 보스: {boss_name}, 점수: {score}, kill_seq: {kill_sequence})")
         return True, kill_sequence
     except Exception as e:
         print(f"[시트 기록 오류] {e} — 캐시 초기화 후 재시도")
         reset_sheet_cache()
         try:
             sheet = get_sheet()
-            INSERT_BEFORE_ROW = 4
-            insert_index = INSERT_BEFORE_ROW - 1
-            pushed_index = insert_index + score
-            sheet.spreadsheet.batch_update({"requests": [
-                {"insertDimension": {"range": {"sheetId": sheet.id, "dimension": "ROWS", "startIndex": insert_index, "endIndex": insert_index + score}, "inheritFromBefore": False}},
-                {"copyPaste": {"source": {"sheetId": sheet.id, "startRowIndex": pushed_index, "endRowIndex": pushed_index + 1, "startColumnIndex": 0, "endColumnIndex": 44}, "destination": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 0, "endColumnIndex": 44}, "pasteType": "PASTE_FORMAT"}},
-                {"copyPaste": {"source": {"sheetId": sheet.id, "startRowIndex": pushed_index, "endRowIndex": pushed_index + 1, "startColumnIndex": 1, "endColumnIndex": 2}, "destination": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 1, "endColumnIndex": 2}, "pasteType": "PASTE_DATA_VALIDATION"}},
-                {"repeatCell": {"range": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 2, "endColumnIndex": 44}, "cell": {"userEnteredFormat": {"numberFormat": {}}}, "fields": "userEnteredFormat.numberFormat"}},
-                {"setDataValidation": {"range": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 2, "endColumnIndex": 44}, "rule": {"condition": {"type": "BOOLEAN"}, "strict": True}}},
-                {"updateBorders": {"range": {"sheetId": sheet.id, "startRowIndex": insert_index, "endRowIndex": insert_index + score, "startColumnIndex": 0, "endColumnIndex": 44}, "top": {"style": "SOLID", "width": 1}, "bottom": {"style": "SOLID", "width": 1}, "left": {"style": "SOLID", "width": 1}, "right": {"style": "SOLID", "width": 1}, "innerHorizontal": {"style": "SOLID", "width": 1}, "innerVertical": {"style": "SOLID", "width": 1}}}
-            ]})
-            today = datetime.now().strftime("%m/%d")
-            values = [[today, boss_name]] * score
-            sheet.update(f"A{INSERT_BEFORE_ROW}:B{INSERT_BEFORE_ROW + score - 1}", values, value_input_option="USER_ENTERED")
+            _do_insert(sheet)
             print(f"[시트] 재시도 성공")
-            return True, kill_sequence
+            return True, 1
         except Exception as e2:
             print(f"[시트 기록 오류] 재시도 실패: {e2}")
             return False, 1
@@ -703,8 +669,8 @@ def parse_time(time_str, must_be_future=False):
 
 def update_participation_batch(boss_name, nicknames, kill_sequence=1, score=1):
     """여러 닉네임을 한 번의 API 호출로 업데이트.
-    kill_sequence: 오늘 같은 보스의 몇 번째 킬인지 (1=첫 번째 킬=가장 오래된 그룹)
-    score: 해당 보스의 점수 (행 그룹 크기)
+    kill_sequence: 오늘 같은 보스의 몇 번째 킬인지 (1=첫 번째 킬=가장 오래된 행)
+    보스명은 C열(index 2), 닉네임은 D열(index 3)부터.
     """
     try:
         sheet = get_sheet()
@@ -720,42 +686,34 @@ def update_participation_batch(boss_name, nicknames, kill_sequence=1, score=1):
 
         header_row = all_values[0]
 
-        # 각 닉네임의 열 찾기
+        # 각 닉네임의 열 찾기 (D열, index 3부터)
         user_cols = {}
         for nickname in nicknames:
-            for i in range(2, min(44, len(header_row))):
+            for i in range(3, min(45, len(header_row))):
                 if header_row[i].strip() == nickname:
                     user_cols[nickname] = i
                     break
 
-        # 오늘 날짜 + 보스명 행 찾기 (1-based, 오름차순)
+        # 오늘 날짜 + 보스명(C열) 행 찾기 (1-based, 오름차순)
         all_matching_rows = []
         for i, row in enumerate(all_values[1:], start=2):
-            if row and is_today(row[0]) and len(row) > 1 and row[1].strip() == boss_name:
+            if row and is_today(row[0]) and len(row) > 2 and row[2].strip() == boss_name:
                 all_matching_rows.append(i)
 
         if not all_matching_rows:
             return False, f"오늘 '{boss_name}' 기록을 찾을 수 없습니다."
 
-        # kill_sequence로 올바른 행 그룹 선택
-        # 행은 삽입 시 위에 추가되므로: 가장 오래된 킬 = 하단 (높은 인덱스)
-        # kill_sequence=1 → 첫 번째 킬 → 마지막 score개 행
-        # kill_sequence=2 → 두 번째 킬 → 뒤에서 두 번째 score개 행
-        group_size = max(score, 1)
-        total_groups = len(all_matching_rows) // group_size
-        if total_groups == 0:
-            target_rows = all_matching_rows
-        else:
-            k = min(kill_sequence, total_groups)
-            end_idx = len(all_matching_rows) - (k - 1) * group_size
-            start_idx = end_idx - group_size
-            target_rows = all_matching_rows[start_idx:end_idx]
+        # kill_sequence로 올바른 행 선택 (1행씩)
+        # 새 킬이 위에 쌓이므로: 가장 오래된 킬 = 하단 (높은 인덱스)
+        # kill_sequence=1 → 첫 번째 킬 → 마지막 행
+        # kill_sequence=2 → 두 번째 킬 → 끝에서 두 번째 행
+        k = min(kill_sequence, len(all_matching_rows))
+        target_row = all_matching_rows[len(all_matching_rows) - k]
 
         # 모든 참여자 셀을 한 번에 업데이트
         updates = [
-            {"range": gspread.utils.rowcol_to_a1(row_num, user_col + 1), "values": [[True]]}
+            {"range": gspread.utils.rowcol_to_a1(target_row, user_col + 1), "values": [[True]]}
             for nickname, user_col in user_cols.items()
-            for row_num in target_rows
         ]
         if updates:
             sheet.batch_update(updates, value_input_option="USER_ENTERED")
