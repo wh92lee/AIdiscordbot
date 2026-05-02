@@ -1175,13 +1175,19 @@ async def on_message(message):
         await score_rank(ctx)
         return
 
+    # 누구나: 보스/ㅄ → 디스코드 현황만
     if message.content.strip() in ("보스", "ㅄ"):
+        ctx = await bot.get_context(message)
+        await status(ctx)
+        return
+
+    # 운영진: !보스/!ㅄ → 디스코드 현황 + 카카오톡 전송
+    if message.content.strip() in ("!보스", "!ㅄ"):
         if not is_staff(message.author):
             await message.channel.send("❌ 운영진만 사용할 수 있는 명령어입니다.")
             return
         ctx = await bot.get_context(message)
         await status(ctx)
-        # 운영진이 조회 시 카카오톡으로도 현황 전송
         await send_kakao_status()
         return
 
