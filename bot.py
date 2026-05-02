@@ -173,7 +173,7 @@ async def send_kakao_status():
             shown_dates.add(boss_date)
         score = get_boss_score(boss_name)
         stars = "⭐" * score if score > 0 else ""
-        kakao_lines.append(f"{i}. {boss_name} ( 🕐 {target_dt.strftime('%H:%M')} ) {stars}".rstrip())
+        kakao_lines.append(f"{i}. 🕐 {target_dt.strftime('%H:%M')} | {boss_name}{stars}")
     if kakao_lines:
         kakao_text = "[ 츄츄봇 - 보스현황 ]\n" + "\n".join(kakao_lines)
         await send_kakao_message(kakao_text)
