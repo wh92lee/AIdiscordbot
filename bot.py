@@ -1380,39 +1380,48 @@ def _build_status_lines():
     urgent = []
     normal = []
 
-    for i, boss_name in enumerate(sorted_bosses, start=1):
+    for boss_name in sorted_bosses:
         target_dt = boss_info[boss_name]["respawn_at"]
         remaining_secs = max(0, (target_dt - datetime.now()).total_seconds())
         if remaining_secs <= 600:
-            urgent.append((i, boss_name))
+            urgent.append(boss_name)
         else:
-            normal.append((i, boss_name))
+            normal.append(boss_name)
 
     lines = []
 
     if urgent:
         lines.append("🚨 **10분 이내 리젠**")
-        lines.append("  →  ".join(f"**{i}. {name}**" for i, name in urgent))
+        lines.append("  →  ".join(f"**{name}**" for name in urgent))
         lines.append("")
 
     if normal:
         shown_dates = set()
         today = datetime.now().date()
-        for i, boss_name in normal:
-            info = boss_info[boss_name]
-            target_dt = info["respawn_at"]
-            label = info["label"]
 
-            boss_date = target_dt.date()
+        # 시간대별로 그룹핑
+        from itertools import groupby
+        def _group_key(name):
+            return (boss_info[name]["respawn_at"].date(),
+                    boss_info[name]["respawn_at"].strftime("%H:%M"))
+
+        for (boss_date, time_str), group in groupby(normal, key=_group_key):
+            group_list = list(group)
+
             if boss_date != today and boss_date not in shown_dates:
                 lines.append("")
                 lines.append(f"─────────── 📅 {boss_date.month}월 {boss_date.day}일 보스 ───────────")
                 lines.append("")
                 shown_dates.add(boss_date)
 
-            lines.append(
-                f"`{i}.` **{boss_name}**  ⏱ {format_remaining(target_dt)}  |  🕐 {target_dt.strftime('%H:%M')}  |  {label}"
-            )
+            for boss_name in group_list:
+                score = get_boss_score(boss_name)
+                stars = "⭐" * score if score > 0 else ""
+                lines.append(f"[ 🕐 {time_str} ] {boss_name}{stars}")
+
+            # 같은 시간대에 2개 이상이면 그룹 뒤에 빈 줄
+            if len(group_list) >= 2:
+                lines.append("")
 
     bosses = load_bosses()
     config = load_config()
