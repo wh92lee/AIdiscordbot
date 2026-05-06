@@ -1366,9 +1366,9 @@ async def set_respawn(ctx, boss_name: str, *time_parts: str):
     await ctx.send(embed=embed)
 
 
-def _build_status_lines():
+def _build_status_lines(name_filter=None):
     """리젠 대기 현황 줄 목록 반환. 활성 보스 없으면 빈 리스트."""
-    active = {k: v for k, v in pending_tasks.items() if not v.done()}
+    active = {k: v for k, v in pending_tasks.items() if not v.done() and (name_filter is None or name_filter(k))}
     if not active:
         return []
 
@@ -1444,6 +1444,34 @@ async def status(ctx):
         title="⏰ 리젠 대기 현황",
         description="\n".join(lines),
         color=discord.Color.orange()
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="침공")
+async def invasion_status(ctx):
+    lines = _build_status_lines(name_filter=lambda n: n.startswith("침공"))
+    if not lines:
+        await ctx.send("⚠️ 현재 대기 중인 침공 보스 알림이 없습니다.")
+        return
+    embed = discord.Embed(
+        title="⏰ 침공 보스 현황",
+        description="\n".join(lines),
+        color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="본토")
+async def normal_status(ctx):
+    lines = _build_status_lines(name_filter=lambda n: not n.startswith("침공"))
+    if not lines:
+        await ctx.send("⚠️ 현재 대기 중인 본토 보스 알림이 없습니다.")
+        return
+    embed = discord.Embed(
+        title="⏰ 본토 보스 현황",
+        description="\n".join(lines),
+        color=discord.Color.blue()
     )
     await ctx.send(embed=embed)
 
@@ -1562,6 +1590,29 @@ async def cancel_boss(ctx, *, boss_name: str):
 @bot.command(name="핑")
 async def ping(ctx):
     await ctx.send(f"🏓 Pong! ({round(bot.latency * 1000)}ms)")
+
+
+@bot.command(name="침공초기화")
+async def reset_invasion(ctx):
+    invasion_names = [name for name in list(boss_info.keys()) if name.startswith("침공")]
+    count = len(invasion_names)
+
+    for name in invasion_names:
+        if name in pending_tasks:
+            pending_tasks[name].cancel()
+            del pending_tasks[name]
+        if name in group_warning_tasks:
+            group_warning_tasks[name].cancel()
+            del group_warning_tasks[name]
+        del boss_info[name]
+        delete_respawn_entry(name)
+
+    embed = discord.Embed(
+        title="🗑️ 침공 초기화 완료",
+        description=f"침공 보스 알림 **{count}개**가 모두 제거되었습니다." if count else "등록된 침공 보스 알림이 없습니다.",
+        color=discord.Color.orange()
+    )
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="보스초기화", aliases=["초기화", "리셋"])
@@ -1793,7 +1844,9 @@ async def show_commands(ctx):
     embed.add_field(
         name="📋 조회",
         value=(
-            "`보스` 또는 `ㅄ` — 현재 대기 중인 보스 현황\n"
+            "`보스` 또는 `ㅄ` — 현재 대기 중인 보스 현황 (전체)\n"
+            "`!침공` — 침공 보스만 현황\n"
+            "`!본토` — 본토 보스만 현황\n"
             "`!보스목록` — 전체 보스 및 리젠 시간 목록\n"
             "`참여` 또는 `!내참여` — 금일 참여현황 조회\n"
             "`점수` 또는 `!점수` — 현재까지 참여율 순위"
@@ -1805,7 +1858,8 @@ async def show_commands(ctx):
         value=(
             "`!알림설정` — 보스별 알림 ON/OFF 설정\n"
             "`!취소 보스명` — 등록된 보스 알림 취소\n"
-            "`!초기화` / `!리셋` / `!보스초기화` — 등록된 보스 알림 전체 제거"
+            "`!초기화` / `!리셋` / `!보스초기화` — 등록된 보스 알림 전체 제거\n"
+            "`!침공초기화` — 침공 보스 알림만 초기화"
         ),
         inline=False
     )
