@@ -320,7 +320,7 @@ def is_today(cell_value):
 
 
 def fetch_score_rank():
-    """시트 1행 닉네임 + 2행 참여율을 읽어 높은순 정렬
+    """시트 1행 닉네임 + 3행 참여율을 읽어 높은순 정렬
     반환: ([(닉네임, 참여율_str), ...], error_msg)
     """
     try:
@@ -332,11 +332,11 @@ def fetch_score_rank():
             sheet = get_sheet()
             all_values = sheet.get_all_values()
 
-        if len(all_values) < 2:
+        if len(all_values) < 3:
             return None, "시트 데이터가 부족합니다."
 
         header_row = all_values[0]   # 1행: 닉네임
-        rate_row   = all_values[1]   # 2행: 참여율
+        rate_row   = all_values[2]   # 3행: 참여율
 
         result = []
         for i in range(3, min(45, len(header_row))):
