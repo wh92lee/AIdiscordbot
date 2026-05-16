@@ -339,7 +339,7 @@ def fetch_score_rank():
         rate_row   = all_values[2]   # 3행: 참여율
 
         result = []
-        for i in range(3, min(45, len(header_row))):
+        for i in range(4, min(46, len(header_row))):
             nickname = header_row[i].strip()
             if not nickname:
                 continue
@@ -377,9 +377,9 @@ def fetch_my_score(nickname):
 
         rate_row = all_values[1] if len(all_values) > 1 else []  # 2행: 참여율
 
-        # D열(index 3) ~ AS열(index 44)에서 닉네임 매칭
+        # E열(index 4) ~ AT열(index 45)에서 닉네임 매칭
         user_col = None
-        for i in range(3, min(45, len(header_row))):
+        for i in range(4, min(46, len(header_row))):
             if header_row[i].strip() == nickname:
                 user_col = i
                 break
@@ -405,7 +405,7 @@ def fetch_my_score(nickname):
 
 
 def record_cut_to_sheet(boss_name, score=1):
-    """항상 1행 삽입. A=날짜, B=점수, C=보스명, D~=체크박스. 반환: (성공여부, kill_sequence)"""
+    """항상 1행 삽입. A=날짜, B=점수, C=보스명, D=빈칸, E~=체크박스. 반환: (성공여부, kill_sequence)"""
     INSERT_BEFORE_ROW = 6       # 항상 6행 위에 삽입 (1-based)
     insert_index = INSERT_BEFORE_ROW - 1  # 0-based = 5
     pushed_index = insert_index + 1       # 삽입 후 밀린 행 위치 (항상 1행)
@@ -440,26 +440,26 @@ def record_cut_to_sheet(boss_name, score=1):
                 },
                 "pasteType": "PASTE_FORMAT"
             }},
-            # D~AS열 숫자 서식 초기화
+            # E~AT열 숫자 서식 초기화
             {"repeatCell": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
                     "endRowIndex": insert_index + 1,
-                    "startColumnIndex": 3,
-                    "endColumnIndex": 45
+                    "startColumnIndex": 4,
+                    "endColumnIndex": 46
                 },
                 "cell": {"userEnteredFormat": {"numberFormat": {}}},
                 "fields": "userEnteredFormat.numberFormat"
             }},
-            # D~AS열 체크박스 데이터 유효성 적용
+            # E~AT열 체크박스 데이터 유효성 적용
             {"setDataValidation": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
                     "endRowIndex": insert_index + 1,
-                    "startColumnIndex": 3,
-                    "endColumnIndex": 45
+                    "startColumnIndex": 4,
+                    "endColumnIndex": 46
                 },
                 "rule": {
                     "condition": {"type": "BOOLEAN"},
@@ -680,7 +680,7 @@ def parse_time(time_str, must_be_future=False):
 def update_participation_batch(boss_name, nicknames, kill_sequence=1, score=1):
     """여러 닉네임을 한 번의 API 호출로 업데이트.
     kill_sequence: 오늘 같은 보스의 몇 번째 킬인지 (1=첫 번째 킬=가장 오래된 행)
-    보스명은 C열(index 2), 닉네임은 D열(index 3)부터.
+    보스명은 C열(index 2), 닉네임은 E열(index 4)부터.
     """
     try:
         sheet = get_sheet()
@@ -696,10 +696,10 @@ def update_participation_batch(boss_name, nicknames, kill_sequence=1, score=1):
 
         header_row = all_values[0]
 
-        # 각 닉네임의 열 찾기 (D열, index 3부터)
+        # 각 닉네임의 열 찾기 (E열, index 4부터)
         user_cols = {}
         for nickname in nicknames:
-            for i in range(3, min(45, len(header_row))):
+            for i in range(4, min(46, len(header_row))):
                 if header_row[i].strip() == nickname:
                     user_cols[nickname] = i
                     break
