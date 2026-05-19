@@ -429,51 +429,61 @@ def record_cut_to_sheet(boss_name, score=1):
                     "startRowIndex": pushed_index,
                     "endRowIndex": pushed_index + 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 45
+                    "endColumnIndex": 29
                 },
                 "destination": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
                     "endRowIndex": insert_index + 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 45
+                    "endColumnIndex": 29
                 },
                 "pasteType": "PASTE_FORMAT"
             }},
-            # E~AT열 숫자 서식 초기화
+            # E~AB열 숫자 서식 초기화
             {"repeatCell": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
                     "endRowIndex": insert_index + 1,
                     "startColumnIndex": 4,
-                    "endColumnIndex": 46
+                    "endColumnIndex": 28
                 },
                 "cell": {"userEnteredFormat": {"numberFormat": {}}},
                 "fields": "userEnteredFormat.numberFormat"
             }},
-            # E~AT열 체크박스 데이터 유효성 적용
+            # E~AB열 체크박스 데이터 유효성 적용
             {"setDataValidation": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
                     "endRowIndex": insert_index + 1,
                     "startColumnIndex": 4,
-                    "endColumnIndex": 46
+                    "endColumnIndex": 28
                 },
                 "rule": {
                     "condition": {"type": "BOOLEAN"},
                     "strict": True
                 }
             }},
-            # 전체 테두리 적용
+            # AC열 데이터 유효성 초기화 (COUNTIF 수식 셀)
+            {"setDataValidation": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": insert_index,
+                    "endRowIndex": insert_index + 1,
+                    "startColumnIndex": 28,
+                    "endColumnIndex": 29
+                }
+            }},
+            # 전체 테두리 적용 (A~AC)
             {"updateBorders": {
                 "range": {
                     "sheetId": sheet.id,
                     "startRowIndex": insert_index,
                     "endRowIndex": insert_index + 1,
                     "startColumnIndex": 0,
-                    "endColumnIndex": 45
+                    "endColumnIndex": 29
                 },
                 "top":    {"style": "SOLID", "width": 1},
                 "bottom": {"style": "SOLID", "width": 1},
@@ -489,6 +499,11 @@ def record_cut_to_sheet(boss_name, score=1):
         sheet.update(
             f"A{INSERT_BEFORE_ROW}:C{INSERT_BEFORE_ROW}",
             [[today, recorded_score, boss_name]],
+            value_input_option="USER_ENTERED"
+        )
+        sheet.update(
+            f"AC{INSERT_BEFORE_ROW}",
+            [[f"=COUNTIF(E{INSERT_BEFORE_ROW}:AB{INSERT_BEFORE_ROW},TRUE)"]],
             value_input_option="USER_ENTERED"
         )
 
