@@ -1206,8 +1206,15 @@ async def on_message(message):
         await send_kakao_status()
         return
 
-    # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
+    # ~ 로 시작하면 TTS 재생
     content = message.content.strip()
+    if content.startswith("~"):
+        tts_text = content[1:].strip()
+        if tts_text:
+            await play_tts(message.channel, tts_text)
+        return
+
+    # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
     if content.startswith(PREFIX):
         parts = content[len(PREFIX):].split()
         if len(parts) >= 2:
