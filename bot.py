@@ -1211,7 +1211,9 @@ async def on_message(message):
     if content.startswith("~"):
         tts_text = content[1:].strip()
         if tts_text:
-            await play_tts(message.channel, tts_text)
+            display_name = message.author.display_name
+            speaker = display_name.split("/")[-1].strip() if "/" in display_name else display_name.strip()
+            await play_tts(message.channel, f"{speaker}님 메세지 {tts_text}")
         return
 
     # !보스명 시간 형식 처리 (예: !니드호그 15:30, !니드호그 2일 7시간)
