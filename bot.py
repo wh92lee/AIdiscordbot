@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import os
+import sys
 import json
 import asyncio
 import tempfile
@@ -954,11 +955,13 @@ async def play_tts(text_channel, text):
     """설정된 음성 채널에서 TTS 재생"""
     vc_id = get_setting("discord", "voice_channel_id")
     if not vc_id:
+        await text_channel.send("❌ TTS: 음성 채널이 설정되지 않았습니다. `!음성채널` 로 설정해주세요.")
         return
 
     guild = text_channel.guild
     voice_channel = guild.get_channel(vc_id)
     if not voice_channel or not isinstance(voice_channel, discord.VoiceChannel):
+        await text_channel.send(f"❌ TTS: 음성 채널을 찾을 수 없습니다. (id={vc_id})")
         return
 
     tts_path = None
@@ -987,6 +990,7 @@ async def play_tts(text_channel, text):
 
     except Exception as e:
         print(f"[TTS 오류] {e}")
+        await text_channel.send(f"❌ TTS 오류: {e}")
         if tts_path and os.path.exists(tts_path):
             os.unlink(tts_path)
 
@@ -1171,6 +1175,8 @@ def register_alert(channel, boss_name, target_dt, label):
 async def on_message(message):
     if message.author.bot:
         return
+
+    print(f"[DEBUG] on_message: author={message.author}, content={repr(message.content)}")
 
     def is_staff(member):
         return any(r.name == ALLOWED_ROLE for r in member.roles)
@@ -1639,6 +1645,18 @@ async def reset_invasion(ctx):
     await ctx.send(embed=embed)
 
 
+@bot.command(name="재시작")
+async def restart_bot(ctx):
+    embed = discord.Embed(
+        title="🔄 봇 재시작",
+        description="봇을 재시작합니다. 잠시 후 다시 온라인 상태가 됩니다.",
+        color=discord.Color.orange()
+    )
+    await ctx.send(embed=embed)
+    await bot.close()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
 @bot.command(name="보스초기화", aliases=["초기화", "리셋"])
 async def reset_all(ctx):
     count = len([t for t in pending_tasks.values() if not t.done()])
@@ -1892,6 +1910,14 @@ async def show_commands(ctx):
         value=(
             "`!음성채널` — 현재 입장 중인 음성 채널을 TTS 채널로 설정\n"
             "`!음성채널해제` — TTS 음성 알림 해제"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="⚙️ 봇 관리",
+        value=(
+            "`!재시작` — 봇 재시작\n"
+            "`!핑` — 봇 응답 속도 확인"
         ),
         inline=False
     )
