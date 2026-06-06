@@ -1653,7 +1653,7 @@ async def restart_bot(ctx):
         color=discord.Color.orange()
     )
     await ctx.send(embed=embed)
-    await bot.close()
+    await asyncio.sleep(1)
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
