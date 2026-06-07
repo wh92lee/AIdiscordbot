@@ -1647,12 +1647,23 @@ async def reset_invasion(ctx):
 
 @bot.command(name="재시작")
 async def restart_bot(ctx):
-    embed = discord.Embed(
-        title="🔄 봇 재시작",
-        description="봇을 재시작합니다. 잠시 후 다시 온라인 상태가 됩니다.",
-        color=discord.Color.orange()
+    import subprocess
+    await ctx.send("🔄 최신 코드 가져오는 중...")
+
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: subprocess.run(
+            ["git", "pull"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
     )
-    await ctx.send(embed=embed)
+
+    if result.returncode == 0:
+        output = result.stdout.strip() or "변경사항 없음"
+        await ctx.send(f"✅ git pull 완료: `{output}`\n🔄 봇을 재시작합니다...")
+    else:
+        await ctx.send(f"⚠️ git pull 실패: `{result.stderr.strip()}`\n🔄 그래도 재시작합니다...")
+
     await asyncio.sleep(1)
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
